@@ -142,7 +142,12 @@ def main() -> None:
     Parses command-line arguments, runs the probe, saves the results, and prints the best layer.
     """
     parser = argparse.ArgumentParser(description="Probe persona representations")
-    parser.add_argument("--model_name", type=str, default="gpt2", help="The name of the model to use.")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="google/gemma-3-4b-it",
+        help="The name of the model to use.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()

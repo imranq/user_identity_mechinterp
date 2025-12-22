@@ -106,7 +106,12 @@ def main() -> None:
                         help="Which experiment to run: 'probe', 'patch', 'cot', or 'all'.")
     
     # Arguments for all experiments
-    parser.add_argument("--model_name", type=str, default="gpt2", help="Model to use (e.g., 'gpt2', 'gpt2-medium').")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="google/gemma-3-4b-it",
+        help="Model to use (e.g., 'gpt2', 'gpt2-medium').",
+    )
     
     # Arguments for the probe experiment
     parser.add_argument("--seed", type=int, default=42, help="Random seed for probe experiment.")

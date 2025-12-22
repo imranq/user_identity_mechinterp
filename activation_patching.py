@@ -112,7 +112,12 @@ def main() -> None:
     and prints the results.
     """
     parser = argparse.ArgumentParser(description="Activation patching for persona tokens")
-    parser.add_argument("--model_name", type=str, default="gpt2", help="The name of the model to use (e.g., 'gpt2').")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="google/gemma-3-4b-it",
+        help="The name of the model to use (e.g., 'gpt2').",
+    )
     parser.add_argument("--pair_id", type=str, default="physics", help="The ID of the persona pair to use (e.g., 'physics').")
     parser.add_argument("--layer", type=int, default=5, help="The layer to perform the activation patching on.")
     args = parser.parse_args()

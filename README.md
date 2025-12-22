@@ -27,5 +27,5 @@ This folder starts a new experiment inspired by the IOI replication, but focused
 3) Use `python run_all.py --experiment patch --pair_id physics` to patch expert -> novice.
 
 Notes:
-- Prefer small, modern models (Gemma 2 2B or Llama 3 8B). For local testing, `gpt2` works.
+- Default model is `google/gemma-3-4b-it`. For quick local smoke tests, use `gpt2`.
 - This is a starting scaffold, not a fully tuned experiment.

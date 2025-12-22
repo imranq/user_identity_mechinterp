@@ -9,7 +9,7 @@ pip install -r requirements.txt
 ```
 
 ## Model notes
-- `google/gemma-2-2b` and `meta-llama/Meta-Llama-3-8B` usually require Hugging Face access.
+- Default model is `google/gemma-3-4b-it` and may require Hugging Face access.
 - For quick smoke tests, use `gpt2` with `--model_name gpt2`.
 
 ## Quick runs

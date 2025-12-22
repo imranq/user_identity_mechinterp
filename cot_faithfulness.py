@@ -80,7 +80,12 @@ def main() -> None:
     between the two choices, and prints the results.
     """
     parser = argparse.ArgumentParser(description="Simple decision pivot / logit lens")
-    parser.add_argument("--model_name", type=str, default="gpt2", help="The name of the model to use.")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="google/gemma-3-4b-it",
+        help="The name of the model to use.",
+    )
     parser.add_argument("--use_hint", action="store_true", help="If set, use the misleading hint in the prompt.")
     args = parser.parse_args()
 
