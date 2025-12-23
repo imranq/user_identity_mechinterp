@@ -60,6 +60,13 @@ def logit_lens_scores(
     _, cache = model.run_with_cache(tokens)
     scores = {choice: [] for choice in choices}
     # Iterate through each layer of the model.
+    choice_token_ids = {}
+    for choice in choices:
+        token_ids = model.to_tokens(choice, prepend_bos=False)[0].tolist()
+        if len(token_ids) != 1:
+            raise ValueError(f"Choice '{choice}' is not a single token: {token_ids}")
+        choice_token_ids[choice] = token_ids[0]
+
     for layer in range(model.cfg.n_layers):
         # Get the residual stream at the final token position for the current layer.
         resid = cache["resid_pre", layer][0, -1]
@@ -67,8 +74,8 @@ def logit_lens_scores(
         logits = model.unembed(resid)
         # For each choice, get its token ID and record the logit value.
         for choice in choices:
-            token_id = model.to_tokens(choice)[0, 0].item()
-            scores[choice].append(logits[token_id].item())
+            token_id = choice_token_ids[choice]
+            scores[choice].append(float(logits[token_id].item()))
     return scores
 
 
@@ -103,6 +110,13 @@ def logit_lens_scores_batch(
             _, cache = model.run_with_cache(tokens, hooks=[(hook_name, steer_hook)])
     else:
         _, cache = model.run_with_cache(tokens)
+    choice_token_ids = {}
+    for choice in choices:
+        token_ids = model.to_tokens(choice, prepend_bos=False)[0].tolist()
+        if len(token_ids) != 1:
+            raise ValueError(f"Choice '{choice}' is not a single token: {token_ids}")
+        choice_token_ids[choice] = token_ids[0]
+
     results: List[Dict[str, List[float]]] = [
         {choice: [] for choice in choices} for _ in prompts
     ]
@@ -112,8 +126,8 @@ def logit_lens_scores_batch(
             resid_i = resid[i, length - 1]
             logits = model.unembed(resid_i)
             for choice in choices:
-                token_id = model.to_tokens(choice)[0, 0].item()
-                results[i][choice].append(logits[token_id].item())
+                token_id = choice_token_ids[choice]
+                results[i][choice].append(float(logits[token_id].item()))
     return results
 
 
@@ -152,6 +166,7 @@ def main() -> None:
     )
     parser.add_argument("--steer_layer", type=int, default=4)
     parser.add_argument("--steer_alpha", type=float, default=0.0)
+    parser.add_argument("--debug_choices", action="store_true", help="Print choice token ids.")
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -164,6 +179,10 @@ def main() -> None:
         prompts.append(f"{prefix}{puzzle['question']}\nAnswer:")
         puzzle_ids.append(puzzle["id"])
         choices = puzzle["choices"]
+
+    if args.debug_choices:
+        token_ids = {c: model.to_tokens(c, prepend_bos=False)[0].tolist() for c in choices}
+        print("Choice token ids:", token_ids)
 
     for i in range(0, len(prompts), args.batch_size):
         batch_prompts = prompts[i : i + args.batch_size]
