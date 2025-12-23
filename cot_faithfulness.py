@@ -76,6 +76,9 @@ def logit_lens_scores_batch(
     model: HookedTransformer,
     prompts: List[str],
     choices: List[str],
+    steer_layer: int | None = None,
+    steer_alpha: float = 0.0,
+    steer_direction: np.ndarray | None = None,
 ) -> List[Dict[str, List[float]]]:
     """
     Batched logit lens scores for multiple prompts.
@@ -84,7 +87,22 @@ def logit_lens_scores_batch(
     """
     lengths = [model.to_tokens(p)[0].shape[0] for p in prompts]
     tokens = model.to_tokens(prompts)
-    _, cache = model.run_with_cache(tokens)
+    hook_name = None
+    if steer_layer is not None and steer_direction is not None and steer_alpha != 0.0:
+        hook_name = f"blocks.{steer_layer}.hook_resid_pre"
+        direction_t = torch.tensor(steer_direction, device=model.cfg.device, dtype=torch.float32)
+
+        def steer_hook(activation, hook):
+            activation = activation + steer_alpha * direction_t
+            return activation
+
+        try:
+            with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
+                _, cache = model.run_with_cache(tokens)
+        except TypeError:
+            _, cache = model.run_with_cache(tokens, hooks=[(hook_name, steer_hook)])
+    else:
+        _, cache = model.run_with_cache(tokens)
     results: List[Dict[str, List[float]]] = [
         {choice: [] for choice in choices} for _ in prompts
     ]
@@ -126,6 +144,14 @@ def main() -> None:
         default=8,
         help="Batch size for running multiple puzzles.",
     )
+    parser.add_argument(
+        "--steer_direction_path",
+        type=str,
+        default="",
+        help="Optional: path to persona_direction.npy for steering.",
+    )
+    parser.add_argument("--steer_layer", type=int, default=4)
+    parser.add_argument("--steer_alpha", type=float, default=0.0)
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -142,12 +168,26 @@ def main() -> None:
     for i in range(0, len(prompts), args.batch_size):
         batch_prompts = prompts[i : i + args.batch_size]
         batch_ids = puzzle_ids[i : i + args.batch_size]
-        batch_scores = logit_lens_scores_batch(model, batch_prompts, choices)
+        steer_direction = None
+        if args.steer_direction_path:
+            steer_direction = np.load(args.steer_direction_path)
+        batch_scores = logit_lens_scores_batch(
+            model,
+            batch_prompts,
+            choices,
+            steer_layer=args.steer_layer if args.steer_direction_path else None,
+            steer_alpha=args.steer_alpha,
+            steer_direction=steer_direction,
+        )
         for pid, scores in zip(batch_ids, batch_scores):
             diffs = np.array(scores[choices[0]]) - np.array(scores[choices[1]])
             pivot_layer = int(np.argmax(diffs))
             print("Puzzle:", pid)
             print("Hinted:", args.use_hint)
+            if args.steer_direction_path:
+                print("Steering:", True)
+                print("Steer layer:", args.steer_layer)
+                print("Steer alpha:", args.steer_alpha)
             print("Pivot layer:", pivot_layer)
             print("Final layer diff:", diffs[-1])
 
