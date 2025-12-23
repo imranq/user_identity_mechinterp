@@ -1,6 +1,8 @@
 torch
 transformer-lens
 einops
+nnsight
+jaxtyping
 numpy
 pandas
 scikit-learn
