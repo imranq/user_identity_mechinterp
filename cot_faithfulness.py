@@ -202,7 +202,17 @@ def main() -> None:
             steer_alpha=args.steer_alpha,
             steer_direction=steer_direction,
         )
-        for pid, scores in zip(batch_ids, batch_scores):
+        baseline_scores = None
+        if args.steer_direction_path:
+            baseline_scores = logit_lens_scores_batch(
+                model,
+                batch_prompts,
+                choices,
+                steer_layer=None,
+                steer_alpha=0.0,
+                steer_direction=None,
+            )
+        for idx, (pid, scores) in enumerate(zip(batch_ids, batch_scores)):
             diffs = np.array(scores[choices[0]]) - np.array(scores[choices[1]])
             pivot_layer = int(np.argmax(diffs))
             deltas = np.diff(diffs, prepend=diffs[0])
@@ -225,7 +235,11 @@ def main() -> None:
             print("Final layer diff:", diffs[-1])
             if plt is not None:
                 fig, ax = plt.subplots(figsize=(7, 3))
-                ax.plot(diffs, label="logit diff (A-B)")
+                ax.plot(diffs, label="steered diff (A-B)" if args.steer_direction_path else "logit diff (A-B)")
+                if baseline_scores is not None:
+                    base = baseline_scores[idx]
+                    base_diffs = np.array(base[choices[0]]) - np.array(base[choices[1]])
+                    ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
                 ax.axvline(pivot_layer, color="tab:orange", linestyle="--", label="pivot")
                 ax.axvline(jump_layer, color="tab:green", linestyle="--", label="max jump")
                 if stable_layer is not None:
@@ -235,7 +249,8 @@ def main() -> None:
                 ax.set_title(f"{pid} | hinted={args.use_hint}")
                 ax.legend()
                 fig.tight_layout()
-                out_name = f"cot_lens_{pid}_hinted_{args.use_hint}.png"
+                suffix = "_steered" if args.steer_direction_path else ""
+                out_name = f"cot_lens_{pid}_hinted_{args.use_hint}{suffix}.png"
                 fig.savefig(out_name)
                 plt.close(fig)
                 print("Saved plot:", out_name)
