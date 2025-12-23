@@ -32,6 +32,8 @@ def run_probe_experiment(
     show_probe_count: int,
     show_probe_vector: bool,
     show_probe_vector_layer: int,
+    show_probe_examples: bool,
+    show_probe_examples_count: int,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -56,6 +58,8 @@ def run_probe_experiment(
         show_probe_count,
         show_probe_vector,
         show_probe_vector_layer,
+        show_probe_examples,
+        show_probe_examples_count,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -214,6 +218,17 @@ def main() -> None:
         help="Layer to print probe vectors for when --show_probe_vector is set.",
     )
     parser.add_argument(
+        "--show_probe_examples",
+        action="store_true",
+        help="Print a preview of the prompt/label pairs before training.",
+    )
+    parser.add_argument(
+        "--show_probe_examples_count",
+        type=int,
+        default=5,
+        help="Number of prompt/label pairs to show when --show_probe_examples is set.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -252,6 +267,8 @@ def main() -> None:
             args.show_probe_count,
             args.show_probe_vector,
             args.show_probe_vector_layer,
+            args.show_probe_examples,
+            args.show_probe_examples_count,
             model=shared_model,
         )
 

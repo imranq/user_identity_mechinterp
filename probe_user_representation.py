@@ -133,6 +133,8 @@ def run_probe(
     show_count: int,
     show_vector: bool,
     show_vector_layer: int,
+    show_examples: bool,
+    show_examples_count: int,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     """
@@ -176,6 +178,14 @@ def run_probe(
     print("Templates:", unique_templates)
     print("Template holdout:", template_holdout)
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
+
+    if show_examples:
+        print("\n--- Probe dataset preview ---")
+        for idx, (prompt, label) in enumerate(prompts[:show_examples_count]):
+            preview = prompt.replace("\n", "\\n")
+            if len(preview) > 240:
+                preview = preview[:240] + "..."
+            print(f"[{idx}] label={label} prompt='{preview}'")
 
     if template_holdout:
         test_template = unique_templates[-1]
@@ -290,6 +300,17 @@ def main() -> None:
         default=1,
         help="Layer to print probe vectors for when --show_probe_vector is set.",
     )
+    parser.add_argument(
+        "--show_probe_examples",
+        action="store_true",
+        help="Print a preview of the prompt/label pairs before training.",
+    )
+    parser.add_argument(
+        "--show_probe_examples_count",
+        type=int,
+        default=5,
+        help="Number of prompt/label pairs to show when --show_probe_examples is set.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -306,6 +327,8 @@ def main() -> None:
         args.show_probe_count,
         args.show_probe_vector,
         args.show_probe_vector_layer,
+        args.show_probe_examples,
+        args.show_probe_examples_count,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
