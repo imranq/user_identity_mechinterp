@@ -68,6 +68,26 @@ def get_persona_token_index(model: HookedTransformer, prompt: str) -> int:
     return marker_start + len(marker_tokens)
 
 
+def get_probe_token_index(
+    model: HookedTransformer,
+    prompt: str,
+    position: str,
+) -> int:
+    if position == "persona":
+        return get_persona_token_index(model, prompt)
+    if position == "prompt_end":
+        tokens = model.to_tokens(prompt)[0].tolist()
+        return len(tokens) - 1
+    if position == "question_end":
+        prefix, sep, _ = prompt.rpartition("Answer:")
+        if not sep:
+            raise ValueError("Prompt does not contain 'Answer:' marker")
+        prefix_tokens = model.to_tokens(prefix)[0].tolist()
+        if len(prefix_tokens) == 0:
+            raise ValueError("Question prefix tokenization is empty")
+        return len(prefix_tokens) - 1
+    raise ValueError(f"Unknown probe position: {position}")
+
 def extract_layer_activations(
     model: HookedTransformer,
     prompts: List[Tuple[str, int]],
@@ -76,6 +96,7 @@ def extract_layer_activations(
     show_count: int,
     show_vector: bool,
     show_vector_layer: int,
+    probe_position: str,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts activations for all layers up to max_layers for a list of prompts.
@@ -95,13 +116,14 @@ def extract_layer_activations(
     for idx, (prompt, label) in enumerate(
         tqdm(prompts, desc="Extracting activations", unit="prompt")
     ):
-        token_index = get_persona_token_index(model, prompt)
+        token_index = get_probe_token_index(model, prompt, probe_position)
         if show_tokens and idx < show_count:
             tokens = model.to_str_tokens(prompt)
             marker_tokens = model.to_str_tokens(PERSONA_MARKER, prepend_bos=False)
             print("\n--- Probe token inspection ---")
             print("Prompt index:", idx)
             print("Label:", label)
+            print("Probe position:", probe_position)
             print("Marker tokens:", marker_tokens)
             print("Probe token index:", token_index)
             print("Probe token string:", tokens[token_index])
@@ -140,6 +162,7 @@ def run_probe(
     show_embedding_table_rows: int,
     show_embedding_table_dims: int,
     show_timing: bool,
+    probe_position: str,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     start_time = time.perf_counter()
@@ -189,6 +212,7 @@ def run_probe(
     print("Unique questions:", len(question_ids))
     print("Templates:", unique_templates)
     print("Template holdout:", template_holdout)
+    print("Probe position:", probe_position)
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if show_examples:
@@ -216,6 +240,7 @@ def run_probe(
         show_count,
         show_vector,
         show_vector_layer,
+        probe_position,
     )
     if show_timing:
         print(f"Timing: activation extraction {time.perf_counter() - t2:.2f}s")
@@ -362,6 +387,13 @@ def main() -> None:
         action="store_true",
         help="Print timing for each stage of the probe run.",
     )
+    parser.add_argument(
+        "--probe_position",
+        type=str,
+        default="question_end",
+        choices=["persona", "question_end", "prompt_end"],
+        help="Token position to probe.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -384,6 +416,7 @@ def main() -> None:
         args.show_embedding_table_rows,
         args.show_embedding_table_dims,
         args.show_timing,
+        args.probe_position,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

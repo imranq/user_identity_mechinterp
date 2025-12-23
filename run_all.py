@@ -38,6 +38,7 @@ def run_probe_experiment(
     show_embedding_table_rows: int,
     show_embedding_table_dims: int,
     show_timing: bool,
+    probe_position: str,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -68,6 +69,7 @@ def run_probe_experiment(
         show_embedding_table_rows,
         show_embedding_table_dims,
         show_timing,
+        probe_position,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -259,6 +261,13 @@ def main() -> None:
         help="Print timing for each stage of the probe run.",
     )
     parser.add_argument(
+        "--probe_position",
+        type=str,
+        default="question_end",
+        choices=["persona", "question_end", "prompt_end"],
+        help="Token position to probe.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -303,6 +312,7 @@ def main() -> None:
             args.show_embedding_table_rows,
             args.show_embedding_table_dims,
             args.show_timing,
+            args.probe_position,
             model=shared_model,
         )
 
