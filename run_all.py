@@ -41,6 +41,8 @@ def run_probe_experiment(
     probe_position: str,
     align_persona_lengths: bool,
     persona_pad_token: str,
+    align_probe_index: bool,
+    probe_template_id: int,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -74,6 +76,8 @@ def run_probe_experiment(
         probe_position,
         align_persona_lengths,
         persona_pad_token,
+        align_probe_index,
+        probe_template_id,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -283,6 +287,17 @@ def main() -> None:
         help="Token string to use for persona padding when aligned.",
     )
     parser.add_argument(
+        "--align_probe_index",
+        action="store_true",
+        help="Pad persona strings to align the probe token index across classes.",
+    )
+    parser.add_argument(
+        "--probe_template_id",
+        type=int,
+        default=0,
+        help="Template id used to align probe index when --align_probe_index is set.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -330,6 +345,8 @@ def main() -> None:
             args.probe_position,
             args.align_persona_lengths,
             args.persona_pad_token,
+            args.align_probe_index,
+            args.probe_template_id,
             model=shared_model,
         )
 

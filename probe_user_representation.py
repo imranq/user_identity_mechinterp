@@ -176,6 +176,8 @@ def run_probe(
     probe_position: str,
     align_persona_lengths: bool,
     pad_token: str,
+    align_probe_index: bool,
+    probe_template_id: int,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     start_time = time.perf_counter()
@@ -210,6 +212,8 @@ def run_probe(
         align_persona_lengths=align_persona_lengths,
         tokenizer=model if align_persona_lengths else None,
         pad_token=pad_token,
+        align_probe_index=align_probe_index,
+        probe_template_id=probe_template_id,
     )
     if show_timing:
         print(f"Timing: dataset build {time.perf_counter() - t1:.2f}s")
@@ -232,6 +236,9 @@ def run_probe(
     print("Align persona lengths:", align_persona_lengths)
     if align_persona_lengths:
         print("Persona pad token:", repr(pad_token))
+    print("Align probe index:", align_probe_index)
+    if align_probe_index:
+        print("Probe template id:", probe_template_id)
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if show_examples:
@@ -440,6 +447,17 @@ def main() -> None:
         default=" X",
         help="Token string to use for persona padding when aligned.",
     )
+    parser.add_argument(
+        "--align_probe_index",
+        action="store_true",
+        help="Pad persona strings to align the probe token index across classes.",
+    )
+    parser.add_argument(
+        "--probe_template_id",
+        type=int,
+        default=0,
+        help="Template id used to align probe index when --align_probe_index is set.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -465,6 +483,8 @@ def main() -> None:
         args.probe_position,
         args.align_persona_lengths,
         args.persona_pad_token,
+        args.align_probe_index,
+        args.probe_template_id,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

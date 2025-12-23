@@ -188,12 +188,40 @@ def _pad_persona_to_length(
     return padded
 
 
+def _pad_until_probe_index(
+    base_template: str,
+    persona: str,
+    question: str,
+    tokenizer: Any,
+    pad_token: str,
+    target_index: int,
+    max_pad_steps: int = 50,
+) -> str:
+    padded = persona
+    for _ in range(max_pad_steps):
+        prompt = base_template.format(
+            persona_marker=PERSONA_MARKER,
+            persona=padded,
+            question=question,
+        )
+        prefix, sep, _ = prompt.rpartition("Answer:")
+        if not sep:
+            raise ValueError("Prompt does not contain 'Answer:' marker")
+        probe_index = len(tokenizer.to_tokens(prefix)[0].tolist()) - 1
+        if probe_index == target_index:
+            return padded
+        padded = f"{padded}{pad_token}"
+    raise ValueError("Failed to align probe token index within max_pad_steps")
+
+
 def build_prompt_dataset(
     n_questions_per_pair: int = 5,
     seed: int = 42,
     align_persona_lengths: bool = False,
     tokenizer: Optional[Any] = None,
     pad_token: str = " X",
+    align_probe_index: bool = False,
+    probe_template_id: int = 0,
 ) -> List[PersonaExample]:
     """
     Build a larger prompt dataset with multiple questions and templates per persona pair.
@@ -234,9 +262,37 @@ def build_prompt_dataset(
             persona_variants = [expert, novice]
 
         for question_id, question in enumerate(selected_questions):
+            target_index = None
+            if align_probe_index:
+                if tokenizer is None:
+                    raise ValueError("tokenizer is required when align_probe_index is True")
+                base_template = PROMPT_TEMPLATES[probe_template_id]
+                expert_prompt = base_template.format(
+                    persona_marker=PERSONA_MARKER,
+                    persona=persona_variants[0],
+                    question=question,
+                )
+                prefix, sep, _ = expert_prompt.rpartition("Answer:")
+                if not sep:
+                    raise ValueError("Prompt does not contain 'Answer:' marker")
+                target_index = len(tokenizer.to_tokens(prefix)[0].tolist()) - 1
             for template_id, template in enumerate(PROMPT_TEMPLATES):
                 for label, persona in enumerate([expert, novice]):
                     persona_name = persona_variants[label]
+                    if align_probe_index:
+                        if tokenizer is None:
+                            raise ValueError("tokenizer is required when align_probe_index is True")
+                        base_template = PROMPT_TEMPLATES[probe_template_id]
+                        if target_index is None:
+                            raise ValueError("Target probe index was not computed")
+                        persona_name = _pad_until_probe_index(
+                            base_template=base_template,
+                            persona=persona_name,
+                            question=question,
+                            tokenizer=tokenizer,
+                            pad_token=pad_token,
+                            target_index=target_index,
+                        )
                     role = "expert" if label == 0 else "novice"
                     prompt = template.format(
                         persona_marker=PERSONA_MARKER,
