@@ -144,9 +144,22 @@ def run_probe(
     )
     prompts = [(p.prompt, p.label) for p in prompt_objs]
     template_ids = [p.template_id for p in prompt_objs]
+    pair_ids = sorted({p.pair_id for p in prompt_objs})
+    unique_templates = sorted(set(template_ids))
+    question_ids = sorted({p.question_id for p in prompt_objs})
+
+    print("\n--- Probe configuration ---")
+    print("Model:", model_name)
+    print("Device:", device)
+    print("Examples:", len(prompts))
+    print("Pairs:", ", ".join(pair_ids))
+    print("Questions per pair:", n_questions_per_pair)
+    print("Unique questions:", len(question_ids))
+    print("Templates:", unique_templates)
+    print("Template holdout:", template_holdout)
+    print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if template_holdout:
-        unique_templates = sorted(set(template_ids))
         test_template = unique_templates[-1]
         train_indices = [i for i, t_id in enumerate(template_ids) if t_id != test_template]
         test_indices = [i for i, t_id in enumerate(template_ids) if t_id == test_template]
