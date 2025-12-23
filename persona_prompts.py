@@ -188,7 +188,11 @@ def _pad_persona_to_length(
     return padded
 
 
-def _find_single_token_pad(tokenizer: Any, pad_token: str) -> str:
+def _find_single_token_pad(tokenizer: Any, pad_token: Optional[str]) -> str:
+    if pad_token is None:
+        pad_token = " X"
+    else:
+        pad_token = str(pad_token)
     if len(tokenizer.to_tokens(pad_token, prepend_bos=False)[0].tolist()) == 1:
         return pad_token
     candidates = [" X", " Y", " Z", " .", " ,", " _", " -", " ~"]
@@ -251,8 +255,10 @@ def build_prompt_dataset(
         A list of PersonaExample objects.
     """
     rng = random.Random(seed)
-    if not pad_token:
+    if pad_token is None:
         pad_token = " X"
+    else:
+        pad_token = str(pad_token)
     pairs = [
         ("physics", "Physics Professor", "5-Year-Old Child"),
         ("auditor", "Skeptical Auditor", "Gullible Enthusiast"),
