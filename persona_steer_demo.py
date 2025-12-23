@@ -24,13 +24,16 @@ DEFAULT_PROMPTS = [
 ]
 
 
-def build_neutral_prompt(question: str, template_id: int = 0) -> str:
+def build_neutral_prompt(question: str, template_id: int = 0, drop_persona: bool = False) -> str:
     template = PROMPT_TEMPLATES[template_id]
-    return template.format(
+    prompt = template.format(
         persona_marker=PERSONA_MARKER,
         persona="",
         question=question,
-    ).replace(f"{PERSONA_MARKER}\nPersona: \n", "")
+    )
+    if drop_persona:
+        return prompt.replace(f"{PERSONA_MARKER}\nPersona: \n", "")
+    return prompt
 
 
 def projection_scores(
@@ -77,6 +80,7 @@ def main() -> None:
     parser.add_argument("--prompts_path", type=str, default="")
     parser.add_argument("--out_path", type=str, default="persona_steer_outputs.jsonl")
     parser.add_argument("--plot_dir", type=str, default="report_artifacts")
+    parser.add_argument("--drop_persona", action="store_true", help="Remove persona line from prompts.")
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -98,7 +102,7 @@ def main() -> None:
 
     outputs: List[Dict[str, str]] = []
     for q in prompts:
-        prompt = build_neutral_prompt(q, args.template_id)
+        prompt = build_neutral_prompt(q, args.template_id, drop_persona=args.drop_persona)
         tokens = model.to_tokens(prompt)
         clean_tokens = model.generate(tokens, max_new_tokens=args.max_new_tokens, do_sample=False)
         clean_text = model.to_string(clean_tokens[0])
@@ -144,7 +148,10 @@ def main() -> None:
     if plt is not None:
         plot_dir = Path(args.plot_dir)
         plot_dir.mkdir(parents=True, exist_ok=True)
-        prompt_texts = [build_neutral_prompt(q, args.template_id) for q in prompts]
+        prompt_texts = [
+            build_neutral_prompt(q, args.template_id, drop_persona=args.drop_persona)
+            for q in prompts
+        ]
         for layer in layers:
             clean_scores = projection_scores(model, prompt_texts, direction, layer, 0.0)
             for alpha in alphas:
