@@ -26,6 +26,7 @@ def run_probe_experiment(
     template_holdout: bool,
     max_layers: int,
     device: str,
+    min_layer: int,
 ) -> None:
     """
     Runs the linear probe experiment and saves the results.
@@ -37,11 +38,20 @@ def run_probe_experiment(
         seed: The random seed for reproducibility.
         save_path: The path to save the CSV file with the results.
     """
-    df = run_probe(model_name, seed, n_questions_per_pair, template_holdout, max_layers, device)
+    df = run_probe(
+        model_name,
+        seed,
+        n_questions_per_pair,
+        template_holdout,
+        max_layers,
+        device,
+        min_layer,
+    )
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
     print("\n--- Probe Experiment Results ---")
     print("Probe results saved to", save_path)
+    print(df.to_string(index=False))
     print(
         "Best layer for persona representation:",
         int(best_row["layer"]),
@@ -148,6 +158,12 @@ def main() -> None:
         help="Maximum number of layers to probe.",
     )
     parser.add_argument(
+        "--min_layer",
+        type=int,
+        default=1,
+        help="Minimum layer to probe (use 0 to include layer 0).",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="auto",
@@ -174,6 +190,7 @@ def main() -> None:
             args.template_holdout,
             args.max_layers,
             args.device,
+            args.min_layer,
         )
 
     if args.experiment in ["patch", "all"]:

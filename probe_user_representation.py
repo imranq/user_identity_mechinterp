@@ -106,6 +106,7 @@ def run_probe(
     template_holdout: bool,
     max_layers: int,
     device: str,
+    min_layer: int,
 ) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
@@ -141,7 +142,8 @@ def run_probe(
     X_all, y = extract_layer_activations(model, prompts, n_layers)
 
     results = []
-    for layer in tqdm(range(n_layers), desc="Training probes", unit="layer"):
+    start_layer = max(0, min_layer)
+    for layer in tqdm(range(start_layer, n_layers), desc="Training probes", unit="layer"):
         X = X_all[:, layer, :]
         if template_holdout:
             X_train = X[train_indices]
@@ -201,6 +203,12 @@ def main() -> None:
         help="Maximum number of layers to probe.",
     )
     parser.add_argument(
+        "--min_layer",
+        type=int,
+        default=1,
+        help="Minimum layer to probe (use 0 to include layer 0).",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="auto",
@@ -217,6 +225,7 @@ def main() -> None:
         args.template_holdout,
         args.max_layers,
         args.device,
+        args.min_layer,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
