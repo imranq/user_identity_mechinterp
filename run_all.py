@@ -9,6 +9,7 @@ manage and run the entire suite of experiments.
 """
 
 import argparse
+import os
 
 from probe_user_representation import run_probe
 from activation_patching import patch_persona_activation
@@ -347,9 +348,12 @@ def main() -> None:
         if device_str.isdigit():
             device_str = f"cuda:{device_str}"
         if device_str.startswith("cuda"):
+            os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
             try:
                 torch.cuda.set_device(0)
             except Exception:
+                pass
+            if torch.cuda.device_count() == 1:
                 device_str = "cuda:0"
         shared_model = HookedTransformer.from_pretrained(args.model_name, device=device_str)
 

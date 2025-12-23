@@ -13,6 +13,7 @@ The process is as follows:
 """
 
 import argparse
+import os
 import time
 from typing import List, Tuple, Optional
 
@@ -204,9 +205,12 @@ def run_probe(
         if device_str.isdigit():
             device_str = f"cuda:{device_str}"
         if device_str.startswith("cuda"):
+            os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
             try:
                 torch.cuda.set_device(0)
             except Exception:
+                pass
+            if torch.cuda.device_count() == 1:
                 device_str = "cuda:0"
         model = HookedTransformer.from_pretrained(model_name, device=device_str)
         if show_timing:
