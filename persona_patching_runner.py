@@ -19,11 +19,16 @@ def apply_direction(
     layer: int,
     probe_position: str,
     alpha: float,
+    token_index: int | None = None,
+    max_new_tokens: int = 80,
 ) -> str:
     direction_t = torch.tensor(direction, device=model.cfg.device, dtype=torch.float32)
+    if token_index is None:
+        token_index = get_probe_token_index(model, prompt, probe_position)
 
     def patch_hook(activation, hook):
-        token_index = get_probe_token_index(model, prompt, probe_position)
+        if activation.shape[1] <= token_index:
+            return activation
         activation[0, token_index] = activation[0, token_index] + alpha * direction_t
         return activation
 
@@ -33,13 +38,13 @@ def apply_direction(
         with model.hooks(fwd_hooks=[(hook_name, patch_hook)]):
             patched_tokens = model.generate(
                 tokens,
-                max_new_tokens=80,
+                max_new_tokens=max_new_tokens,
                 do_sample=False,
             )
     except TypeError:
         patched_tokens = model.generate(
             tokens,
-            max_new_tokens=80,
+            max_new_tokens=max_new_tokens,
             do_sample=False,
             hooks=[(hook_name, patch_hook)],
         )
@@ -53,6 +58,7 @@ def main() -> None:
     parser.add_argument("--layer", type=int, default=4)
     parser.add_argument("--probe_position", type=str, default="question_last_token")
     parser.add_argument("--alpha", type=float, default=3.0)
+    parser.add_argument("--max_new_tokens", type=int, default=80)
     parser.add_argument("--n_questions_per_pair", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="auto")
@@ -60,6 +66,8 @@ def main() -> None:
     parser.add_argument("--probe_template_id", type=int, default=0)
     parser.add_argument("--persona_pad_token", type=str, default=" X")
     parser.add_argument("--out_path", type=str, default="patched_outputs.jsonl")
+    parser.add_argument("--verbose", action="store_true", help="Print per-prompt details.")
+    parser.add_argument("--log_every", type=int, default=20, help="Log every N prompts when verbose.")
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -76,6 +84,9 @@ def main() -> None:
     direction = np.load(args.direction_path)
     print("Direction shape:", direction.shape)
 
+    if args.verbose:
+        print("Max new tokens:", args.max_new_tokens)
+
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=args.n_questions_per_pair,
         seed=args.seed,
@@ -87,12 +98,20 @@ def main() -> None:
         drop_persona=False,
     )
 
+    print("Total prompts:", len(prompt_objs))
     outputs: List[Dict[str, str]] = []
-    for item in tqdm(prompt_objs, desc="Patching prompts", unit="prompt"):
+    for idx, item in enumerate(tqdm(prompt_objs, desc="Patching prompts", unit="prompt")):
         prompt = item.prompt
         tokens = model.to_tokens(prompt)
-        clean_tokens = model.generate(tokens, max_new_tokens=80, do_sample=False)
+        clean_tokens = model.generate(tokens, max_new_tokens=args.max_new_tokens, do_sample=False)
         clean_text = model.to_string(clean_tokens[0])
+        token_index = get_probe_token_index(model, prompt, args.probe_position)
+        if args.verbose and (idx < 3 or (args.log_every > 0 and idx % args.log_every == 0)):
+            prompt_len = tokens.shape[1]
+            print(
+                f"[{idx}] pair={item.pair_id} role={item.role} "
+                f"prompt_len={prompt_len} token_index={token_index}"
+            )
         patched_text = apply_direction(
             model,
             prompt,
@@ -100,6 +119,8 @@ def main() -> None:
             args.layer,
             args.probe_position,
             args.alpha,
+            token_index=token_index,
+            max_new_tokens=args.max_new_tokens,
         )
         outputs.append(
             {
