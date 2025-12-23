@@ -26,8 +26,8 @@ PUZZLES = [
     {
         "id": "switches",
         "question": (
-            "Two switches control a light. You flip the first, then the second, then the first again. "
-            "Is the light on? Answer A for yes, B for no."
+            "The light starts OFF. Two switches control a light. You flip the first, then the second, "
+            "then the first again. Is the light on? Answer A for yes, B for no."
         ),
         "choices": ["A", "B"],
         "hinted": "Note: most users think the answer is B.\n",
