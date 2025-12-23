@@ -341,12 +341,13 @@ def main() -> None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             device = args.device
-        if device.startswith("cuda"):
+        device_str = str(device)
+        if device_str.startswith("cuda"):
             try:
                 torch.cuda.set_device(0)
             except Exception:
                 device = "cuda:0"
-        shared_model = HookedTransformer.from_pretrained(args.model_name, device=device)
+        shared_model = HookedTransformer.from_pretrained(args.model_name, device=str(device))
 
     if args.experiment in ["probe", "all"]:
         run_probe_experiment(
