@@ -37,6 +37,7 @@ def run_probe_experiment(
     show_embedding_table: bool,
     show_embedding_table_rows: int,
     show_embedding_table_dims: int,
+    show_timing: bool,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -66,6 +67,7 @@ def run_probe_experiment(
         show_embedding_table,
         show_embedding_table_rows,
         show_embedding_table_dims,
+        show_timing,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -252,6 +254,11 @@ def main() -> None:
         help="Number of embedding dimensions to show in the table.",
     )
     parser.add_argument(
+        "--show_timing",
+        action="store_true",
+        help="Print timing for each stage of the probe run.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -295,6 +302,7 @@ def main() -> None:
             args.show_embedding_table,
             args.show_embedding_table_rows,
             args.show_embedding_table_dims,
+            args.show_timing,
             model=shared_model,
         )
 

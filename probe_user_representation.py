@@ -13,6 +13,7 @@ The process is as follows:
 """
 
 import argparse
+import time
 from typing import List, Tuple, Optional
 
 import numpy as np
@@ -138,8 +139,10 @@ def run_probe(
     show_embedding_table: bool,
     show_embedding_table_rows: int,
     show_embedding_table_dims: int,
+    show_timing: bool,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
+    start_time = time.perf_counter()
     """
     Runs the linear probing experiment across all layers of a model.
 
@@ -153,18 +156,24 @@ def run_probe(
     torch.manual_seed(seed)
     np.random.seed(seed)
     if model is None:
+        t0 = time.perf_counter()
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
         model = HookedTransformer.from_pretrained(model_name, device=device)
+        if show_timing:
+            print(f"Timing: model load {time.perf_counter() - t0:.2f}s")
         device_name = device
         display_name = model_name
     else:
         device_name = str(model.cfg.device)
         display_name = getattr(model.cfg, "model_name", model_name)
+    t1 = time.perf_counter()
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=n_questions_per_pair,
         seed=seed,
     )
+    if show_timing:
+        print(f"Timing: dataset build {time.perf_counter() - t1:.2f}s")
     prompts = [(p.prompt, p.label) for p in prompt_objs]
     template_ids = [p.template_id for p in prompt_objs]
     pair_ids = sorted({p.pair_id for p in prompt_objs})
@@ -198,6 +207,7 @@ def run_probe(
         train_indices, test_indices = None, None
 
     n_layers = min(model.cfg.n_layers, max_layers)
+    t2 = time.perf_counter()
     X_all, y = extract_layer_activations(
         model,
         prompts,
@@ -207,6 +217,8 @@ def run_probe(
         show_vector,
         show_vector_layer,
     )
+    if show_timing:
+        print(f"Timing: activation extraction {time.perf_counter() - t2:.2f}s")
 
     if show_embedding_table:
         layer_idx = max(0, min(show_vector_layer, n_layers - 1))
@@ -220,6 +232,7 @@ def run_probe(
 
     results = []
     start_layer = max(0, min_layer)
+    t3 = time.perf_counter()
     for layer in tqdm(range(start_layer, n_layers), desc="Training probes", unit="layer"):
         X = X_all[:, layer, :]
         if template_holdout:
@@ -244,6 +257,9 @@ def run_probe(
         else:
             auc = float("nan")
         results.append({"layer": layer, "accuracy": acc, "auc": auc})
+    if show_timing:
+        print(f"Timing: probe training {time.perf_counter() - t3:.2f}s")
+        print(f"Timing: total run {time.perf_counter() - start_time:.2f}s")
 
     df = pd.DataFrame(results)
     return df
@@ -341,6 +357,11 @@ def main() -> None:
         default=8,
         help="Number of embedding dimensions to show in the table.",
     )
+    parser.add_argument(
+        "--show_timing",
+        action="store_true",
+        help="Print timing for each stage of the probe run.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -362,6 +383,7 @@ def main() -> None:
         args.show_embedding_table,
         args.show_embedding_table_rows,
         args.show_embedding_table_dims,
+        args.show_timing,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
