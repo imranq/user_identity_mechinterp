@@ -174,6 +174,8 @@ def run_probe(
     show_embedding_table_dims: int,
     show_timing: bool,
     probe_position: str,
+    align_persona_lengths: bool,
+    pad_token: str,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     start_time = time.perf_counter()
@@ -205,6 +207,9 @@ def run_probe(
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=n_questions_per_pair,
         seed=seed,
+        align_persona_lengths=align_persona_lengths,
+        tokenizer=model if align_persona_lengths else None,
+        pad_token=pad_token,
     )
     if show_timing:
         print(f"Timing: dataset build {time.perf_counter() - t1:.2f}s")
@@ -224,6 +229,9 @@ def run_probe(
     print("Templates:", unique_templates)
     print("Template holdout:", template_holdout)
     print("Probe position:", probe_position)
+    print("Align persona lengths:", align_persona_lengths)
+    if align_persona_lengths:
+        print("Persona pad token:", repr(pad_token))
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if show_examples:
@@ -421,6 +429,17 @@ def main() -> None:
         choices=["persona", "question_end", "question_last_token", "prompt_end"],
         help="Token position to probe.",
     )
+    parser.add_argument(
+        "--align_persona_lengths",
+        action="store_true",
+        help="Pad persona strings to equal token length to avoid position leakage.",
+    )
+    parser.add_argument(
+        "--persona_pad_token",
+        type=str,
+        default=" X",
+        help="Token string to use for persona padding when aligned.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -444,6 +463,8 @@ def main() -> None:
         args.show_embedding_table_dims,
         args.show_timing,
         args.probe_position,
+        args.align_persona_lengths,
+        args.persona_pad_token,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

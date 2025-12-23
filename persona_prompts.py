@@ -6,7 +6,7 @@ and constructs a structured prompt for each.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Any
 import random
 
 # A constant string used as a marker to identify the persona part of the prompt.
@@ -176,9 +176,24 @@ def build_prompts() -> List[PersonaPrompt]:
     return prompts
 
 
+def _pad_persona_to_length(
+    persona: str,
+    target_len: int,
+    tokenizer: Any,
+    pad_token: str,
+) -> str:
+    padded = persona
+    while len(tokenizer.to_tokens(padded, prepend_bos=False)[0].tolist()) < target_len:
+        padded = f"{padded}{pad_token}"
+    return padded
+
+
 def build_prompt_dataset(
     n_questions_per_pair: int = 5,
     seed: int = 42,
+    align_persona_lengths: bool = False,
+    tokenizer: Optional[Any] = None,
+    pad_token: str = " X",
 ) -> List[PersonaExample]:
     """
     Build a larger prompt dataset with multiple questions and templates per persona pair.
@@ -206,13 +221,26 @@ def build_prompt_dataset(
         else:
             selected_questions = [rng.choice(questions) for _ in range(n_questions_per_pair)]
 
+        if align_persona_lengths:
+            if tokenizer is None:
+                raise ValueError("tokenizer is required when align_persona_lengths is True")
+            expert_len = len(tokenizer.to_tokens(expert, prepend_bos=False)[0].tolist())
+            novice_len = len(tokenizer.to_tokens(novice, prepend_bos=False)[0].tolist())
+            target_len = max(expert_len, novice_len)
+            expert_name = _pad_persona_to_length(expert, target_len, tokenizer, pad_token)
+            novice_name = _pad_persona_to_length(novice, target_len, tokenizer, pad_token)
+            persona_variants = [expert_name, novice_name]
+        else:
+            persona_variants = [expert, novice]
+
         for question_id, question in enumerate(selected_questions):
             for template_id, template in enumerate(PROMPT_TEMPLATES):
                 for label, persona in enumerate([expert, novice]):
+                    persona_name = persona_variants[label]
                     role = "expert" if label == 0 else "novice"
                     prompt = template.format(
                         persona_marker=PERSONA_MARKER,
-                        persona=persona,
+                        persona=persona_name,
                         question=question,
                     )
                     examples.append(

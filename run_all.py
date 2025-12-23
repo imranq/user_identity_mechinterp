@@ -39,6 +39,8 @@ def run_probe_experiment(
     show_embedding_table_dims: int,
     show_timing: bool,
     probe_position: str,
+    align_persona_lengths: bool,
+    persona_pad_token: str,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -70,6 +72,8 @@ def run_probe_experiment(
         show_embedding_table_dims,
         show_timing,
         probe_position,
+        align_persona_lengths,
+        persona_pad_token,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -268,6 +272,17 @@ def main() -> None:
         help="Token position to probe.",
     )
     parser.add_argument(
+        "--align_persona_lengths",
+        action="store_true",
+        help="Pad persona strings to equal token length to avoid position leakage.",
+    )
+    parser.add_argument(
+        "--persona_pad_token",
+        type=str,
+        default=" X",
+        help="Token string to use for persona padding when aligned.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -313,6 +328,8 @@ def main() -> None:
             args.show_embedding_table_dims,
             args.show_timing,
             args.probe_position,
+            args.align_persona_lengths,
+            args.persona_pad_token,
             model=shared_model,
         )
 
