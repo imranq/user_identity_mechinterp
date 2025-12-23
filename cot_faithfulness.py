@@ -19,6 +19,10 @@ import numpy as np
 import torch
 from transformer_lens import HookedTransformer
 
+try:
+    import matplotlib.pyplot as plt
+except Exception:
+    plt = None
 
 # A list of puzzles to test the model on. Each puzzle has an ID, a question, a list of choices,
 # and a "hinted" version of the question.
@@ -201,6 +205,14 @@ def main() -> None:
         for pid, scores in zip(batch_ids, batch_scores):
             diffs = np.array(scores[choices[0]]) - np.array(scores[choices[1]])
             pivot_layer = int(np.argmax(diffs))
+            deltas = np.diff(diffs, prepend=diffs[0])
+            jump_layer = int(np.argmax(np.abs(deltas)))
+            stable_layer = None
+            threshold = 0.05
+            for layer in range(len(deltas)):
+                if np.all(np.abs(deltas[layer:]) < threshold):
+                    stable_layer = layer
+                    break
             print("Puzzle:", pid)
             print("Hinted:", args.use_hint)
             if args.steer_direction_path:
@@ -208,7 +220,25 @@ def main() -> None:
                 print("Steer layer:", args.steer_layer)
                 print("Steer alpha:", args.steer_alpha)
             print("Pivot layer:", pivot_layer)
+            print("Largest jump layer:", jump_layer)
+            print("Stabilization layer:", stable_layer)
             print("Final layer diff:", diffs[-1])
+            if plt is not None:
+                fig, ax = plt.subplots(figsize=(7, 3))
+                ax.plot(diffs, label="logit diff (A-B)")
+                ax.axvline(pivot_layer, color="tab:orange", linestyle="--", label="pivot")
+                ax.axvline(jump_layer, color="tab:green", linestyle="--", label="max jump")
+                if stable_layer is not None:
+                    ax.axvline(stable_layer, color="tab:red", linestyle="--", label="stable")
+                ax.set_xlabel("layer")
+                ax.set_ylabel("logit diff")
+                ax.set_title(f"{pid} | hinted={args.use_hint}")
+                ax.legend()
+                fig.tight_layout()
+                out_name = f"cot_lens_{pid}_hinted_{args.use_hint}.png"
+                fig.savefig(out_name)
+                plt.close(fig)
+                print("Saved plot:", out_name)
 
 
 if __name__ == "__main__":
