@@ -112,6 +112,6 @@ mats/ioi_replication/runpod_ioi.sh terminate
 
 ## Quick runs
 ```bash
-python run_all.py --experiment probe --model_name gpt2 --n_questions_per_pair 10 --template_holdout
+python run_all.py --experiment probe --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12
 python run_all.py --experiment patch --model_name gpt2 --pair_id physics
 ```

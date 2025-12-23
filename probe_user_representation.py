@@ -21,6 +21,7 @@ import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score
+from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
 from persona_prompts import build_prompt_dataset, PERSONA_MARKER
@@ -69,32 +70,33 @@ def get_persona_token_index(model: HookedTransformer, prompt: str) -> int:
 def extract_layer_activations(
     model: HookedTransformer,
     prompts: List[Tuple[str, int]],
-    layer: int,
+    max_layers: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Extracts activations from a specific layer for a list of prompts.
+    Extracts activations for all layers up to max_layers for a list of prompts.
 
     Args:
         model: The HookedTransformer model.
         prompts: A list of tuples, where each tuple is (prompt_string, label).
-        layer: The layer from which to extract activations.
+        max_layers: The number of layers to extract activations for.
 
     Returns:
         A tuple containing:
-        - A numpy array of the activations (num_prompts, hidden_size).
+        - A numpy array of the activations (num_prompts, num_layers, hidden_size).
         - A numpy array of the corresponding labels.
     """
     activations = []
     labels = []
-    for prompt, label in prompts:
+    for prompt, label in tqdm(prompts, desc="Extracting activations", unit="prompt"):
         token_index = get_persona_token_index(model, prompt)
-        # Run the model and cache activations.
         _, cache = model.run_with_cache(prompt)
-        # Get the residual stream activation at the persona token index for the specified layer.
-        resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
-        activations.append(resid)
+        layer_acts = []
+        for layer in range(max_layers):
+            resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
+            layer_acts.append(resid)
+        activations.append(np.stack(layer_acts))
         labels.append(label)
-    return np.vstack(activations), np.array(labels)
+    return np.stack(activations), np.array(labels)
 
 
 def run_probe(
@@ -102,6 +104,8 @@ def run_probe(
     seed: int,
     n_questions_per_pair: int,
     template_holdout: bool,
+    max_layers: int,
+    device: str,
 ) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
@@ -115,7 +119,9 @@ def run_probe(
     """
     torch.manual_seed(seed)
     np.random.seed(seed)
-    model = HookedTransformer.from_pretrained(model_name, device="cpu")
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = HookedTransformer.from_pretrained(model_name, device=device)
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=n_questions_per_pair,
         seed=seed,
@@ -131,11 +137,12 @@ def run_probe(
     else:
         train_indices, test_indices = None, None
 
+    n_layers = min(model.cfg.n_layers, max_layers)
+    X_all, y = extract_layer_activations(model, prompts, n_layers)
+
     results = []
-    # Iterate through each layer of the model.
-    for layer in range(model.cfg.n_layers):
-        # Extract activations for the current layer.
-        X, y = extract_layer_activations(model, prompts, layer)
+    for layer in tqdm(range(n_layers), desc="Training probes", unit="layer"):
+        X = X_all[:, layer, :]
         if template_holdout:
             X_train = X[train_indices]
             y_train = y[train_indices]
@@ -187,6 +194,18 @@ def main() -> None:
         action="store_true",
         help="Hold out one prompt template for testing.",
     )
+    parser.add_argument(
+        "--max_layers",
+        type=int,
+        default=32,
+        help="Maximum number of layers to probe.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device to use: auto/cpu/cuda.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -196,6 +215,8 @@ def main() -> None:
         args.seed,
         args.n_questions_per_pair,
         args.template_holdout,
+        args.max_layers,
+        args.device,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

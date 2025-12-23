@@ -24,6 +24,8 @@ def run_probe_experiment(
     save_path: str,
     n_questions_per_pair: int,
     template_holdout: bool,
+    max_layers: int,
+    device: str,
 ) -> None:
     """
     Runs the linear probe experiment and saves the results.
@@ -35,7 +37,7 @@ def run_probe_experiment(
         seed: The random seed for reproducibility.
         save_path: The path to save the CSV file with the results.
     """
-    df = run_probe(model_name, seed, n_questions_per_pair, template_holdout)
+    df = run_probe(model_name, seed, n_questions_per_pair, template_holdout, max_layers, device)
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
     print("\n--- Probe Experiment Results ---")
@@ -139,6 +141,18 @@ def main() -> None:
         action="store_true",
         help="Hold out one prompt template for testing.",
     )
+    parser.add_argument(
+        "--max_layers",
+        type=int,
+        default=32,
+        help="Maximum number of layers to probe.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device to use: auto/cpu/cuda.",
+    )
 
     # Arguments for the activation patching experiment
     parser.add_argument("--pair_id", type=str, default="physics", help="Persona pair ID for patching (e.g., 'physics').")
@@ -158,6 +172,8 @@ def main() -> None:
             args.save_path,
             args.n_questions_per_pair,
             args.template_holdout,
+            args.max_layers,
+            args.device,
         )
 
     if args.experiment in ["patch", "all"]:
