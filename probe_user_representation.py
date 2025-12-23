@@ -210,7 +210,7 @@ def run_probe(
         n_questions_per_pair=n_questions_per_pair,
         seed=seed,
         align_persona_lengths=align_persona_lengths,
-        tokenizer=model if align_persona_lengths else None,
+        tokenizer=model if (align_persona_lengths or align_probe_index) else None,
         pad_token=pad_token,
         align_probe_index=align_probe_index,
         probe_template_id=probe_template_id,
