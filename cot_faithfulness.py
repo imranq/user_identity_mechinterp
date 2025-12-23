@@ -72,6 +72,33 @@ def logit_lens_scores(
     return scores
 
 
+def logit_lens_scores_batch(
+    model: HookedTransformer,
+    prompts: List[str],
+    choices: List[str],
+) -> List[Dict[str, List[float]]]:
+    """
+    Batched logit lens scores for multiple prompts.
+
+    Returns a list of score dicts (one per prompt).
+    """
+    lengths = [model.to_tokens(p)[0].shape[0] for p in prompts]
+    tokens = model.to_tokens(prompts)
+    _, cache = model.run_with_cache(tokens)
+    results: List[Dict[str, List[float]]] = [
+        {choice: [] for choice in choices} for _ in prompts
+    ]
+    for layer in range(model.cfg.n_layers):
+        resid = cache["resid_pre", layer]
+        for i, length in enumerate(lengths):
+            resid_i = resid[i, length - 1]
+            logits = model.unembed(resid_i)
+            for choice in choices:
+                token_id = model.to_tokens(choice)[0, 0].item()
+                results[i][choice].append(logits[token_id].item())
+    return results
+
+
 def main() -> None:
     """
     Main function to run the logit lens experiment.
@@ -87,27 +114,42 @@ def main() -> None:
         help="The name of the model to use.",
     )
     parser.add_argument("--use_hint", action="store_true", help="If set, use the misleading hint in the prompt.")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="Device to run on (e.g., cuda, cuda:0, cpu).",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="Batch size for running multiple puzzles.",
+    )
     args = parser.parse_args()
 
     # Load the pre-trained model.
-    model = HookedTransformer.from_pretrained(args.model_name, device="cpu")
+    model = HookedTransformer.from_pretrained(args.model_name, device=args.device)
+    prompts = []
+    puzzle_ids = []
+    choices = []
     for puzzle in PUZZLES:
-        # Construct the prompt with or without the hint.
         prefix = puzzle["hinted"] if args.use_hint else ""
-        prompt = f"{prefix}{puzzle['question']}\nAnswer:"
-        # Get the logit scores for each choice at each layer.
-        scores = logit_lens_scores(model, prompt, puzzle["choices"])
+        prompts.append(f"{prefix}{puzzle['question']}\nAnswer:")
+        puzzle_ids.append(puzzle["id"])
+        choices = puzzle["choices"]
 
-        # Calculate the difference in logits between the two choices at each layer.
-        diffs = np.array(scores[puzzle["choices"][0]]) - np.array(scores[puzzle["choices"][1]])
-        # The pivot layer is the one with the maximum logit difference.
-        pivot_layer = int(np.argmax(diffs))
-        
-        # Print the results.
-        print("Puzzle:", puzzle["id"])
-        print("Hinted:", args.use_hint)
-        print("Pivot layer:", pivot_layer)
-        print("Final layer diff:", diffs[-1])
+    for i in range(0, len(prompts), args.batch_size):
+        batch_prompts = prompts[i : i + args.batch_size]
+        batch_ids = puzzle_ids[i : i + args.batch_size]
+        batch_scores = logit_lens_scores_batch(model, batch_prompts, choices)
+        for pid, scores in zip(batch_ids, batch_scores):
+            diffs = np.array(scores[choices[0]]) - np.array(scores[choices[1]])
+            pivot_layer = int(np.argmax(diffs))
+            print("Puzzle:", pid)
+            print("Hinted:", args.use_hint)
+            print("Pivot layer:", pivot_layer)
+            print("Final layer diff:", diffs[-1])
 
 
 if __name__ == "__main__":
