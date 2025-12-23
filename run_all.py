@@ -29,6 +29,8 @@ def run_probe_experiment(
     min_layer: int,
     show_probe_tokens: bool,
     show_probe_count: int,
+    show_probe_vector: bool,
+    show_probe_vector_layer: int,
 ) -> None:
     """
     Runs the linear probe experiment and saves the results.
@@ -50,6 +52,8 @@ def run_probe_experiment(
         min_layer,
         show_probe_tokens,
         show_probe_count,
+        show_probe_vector,
+        show_probe_vector_layer,
     )
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
@@ -184,6 +188,17 @@ def main() -> None:
         default=3,
         help="Number of prompts to show when --show_probe_tokens is set.",
     )
+    parser.add_argument(
+        "--show_probe_vector",
+        action="store_true",
+        help="Print the probe vector for a few prompts at a specific layer.",
+    )
+    parser.add_argument(
+        "--show_probe_vector_layer",
+        type=int,
+        default=1,
+        help="Layer to print probe vectors for when --show_probe_vector is set.",
+    )
 
     # Arguments for the activation patching experiment
     parser.add_argument("--pair_id", type=str, default="physics", help="Persona pair ID for patching (e.g., 'physics').")
@@ -208,6 +223,8 @@ def main() -> None:
             args.min_layer,
             args.show_probe_tokens,
             args.show_probe_count,
+            args.show_probe_vector,
+            args.show_probe_vector_layer,
         )
 
     if args.experiment in ["patch", "all"]:

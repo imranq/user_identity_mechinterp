@@ -73,6 +73,8 @@ def extract_layer_activations(
     max_layers: int,
     show_tokens: bool,
     show_count: int,
+    show_vector: bool,
+    show_vector_layer: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts activations for all layers up to max_layers for a list of prompts.
@@ -106,6 +108,13 @@ def extract_layer_activations(
         layer_acts = []
         for layer in range(max_layers):
             resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
+            if show_vector and idx < show_count and layer == show_vector_layer:
+                print("\n--- Probe vector inspection ---")
+                print("Prompt index:", idx)
+                print("Layer:", layer)
+                print("Vector shape:", resid.shape)
+                print("Vector L2 norm:", float(np.linalg.norm(resid)))
+                print("Vector head (8):", np.array2string(resid[:8], precision=4))
             layer_acts.append(resid)
         activations.append(np.stack(layer_acts))
         labels.append(label)
@@ -122,6 +131,8 @@ def run_probe(
     min_layer: int,
     show_tokens: bool,
     show_count: int,
+    show_vector: bool,
+    show_vector_layer: int,
 ) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
@@ -168,7 +179,13 @@ def run_probe(
 
     n_layers = min(model.cfg.n_layers, max_layers)
     X_all, y = extract_layer_activations(
-        model, prompts, n_layers, show_tokens, show_count
+        model,
+        prompts,
+        n_layers,
+        show_tokens,
+        show_count,
+        show_vector,
+        show_vector_layer,
     )
 
     results = []
@@ -255,6 +272,17 @@ def main() -> None:
         default=3,
         help="Number of prompts to show when --show_probe_tokens is set.",
     )
+    parser.add_argument(
+        "--show_probe_vector",
+        action="store_true",
+        help="Print the probe vector for a few prompts at a specific layer.",
+    )
+    parser.add_argument(
+        "--show_probe_vector_layer",
+        type=int,
+        default=1,
+        help="Layer to print probe vectors for when --show_probe_vector is set.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -269,6 +297,8 @@ def main() -> None:
         args.min_layer,
         args.show_probe_tokens,
         args.show_probe_count,
+        args.show_probe_vector,
+        args.show_probe_vector_layer,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
