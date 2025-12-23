@@ -109,6 +109,7 @@ def extract_layer_activations(
     show_vector: bool,
     show_vector_layer: int,
     probe_position: str,
+    batch_size: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts activations for all layers up to max_layers for a list of prompts.
@@ -125,34 +126,49 @@ def extract_layer_activations(
     """
     activations = []
     labels = []
-    for idx, (prompt, label) in enumerate(
-        tqdm(prompts, desc="Extracting activations", unit="prompt")
-    ):
-        token_index = get_probe_token_index(model, prompt, probe_position)
-        if show_tokens and idx < show_count:
+    prompts_only = [prompt for prompt, _ in prompts]
+    token_indices = [
+        get_probe_token_index(model, prompt, probe_position) for prompt in prompts_only
+    ]
+    for idx in range(min(show_count, len(prompts_only))):
+        if show_tokens:
+            prompt = prompts_only[idx]
             tokens = model.to_str_tokens(prompt)
             marker_tokens = model.to_str_tokens(PERSONA_MARKER, prepend_bos=False)
             print("\n--- Probe token inspection ---")
             print("Prompt index:", idx)
-            print("Label:", label)
+            print("Label:", prompts[idx][1])
             print("Probe position:", probe_position)
             print("Marker tokens:", marker_tokens)
-            print("Probe token index:", token_index)
-            print("Probe token string:", tokens[token_index])
-        _, cache = model.run_with_cache(prompt)
-        layer_acts = []
-        for layer in range(max_layers):
-            resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
-            if show_vector and idx < show_count and layer == show_vector_layer:
-                print("\n--- Probe vector inspection ---")
-                print("Prompt index:", idx)
-                print("Layer:", layer)
-                print("Vector shape:", resid.shape)
-                print("Vector L2 norm:", float(np.linalg.norm(resid)))
-                print("Vector head (8):", np.array2string(resid[:8], precision=4))
-            layer_acts.append(resid)
-        activations.append(np.stack(layer_acts))
-        labels.append(label)
+            print("Probe token index:", token_indices[idx])
+            print("Probe token string:", tokens[token_indices[idx]])
+
+    for start in tqdm(
+        range(0, len(prompts_only), batch_size),
+        desc="Extracting activations",
+        unit="batch",
+    ):
+        end = min(start + batch_size, len(prompts_only))
+        batch_prompts = prompts_only[start:end]
+        batch_tokens = model.to_tokens(batch_prompts)
+        if batch_tokens.device != model.cfg.device:
+            batch_tokens = batch_tokens.to(model.cfg.device)
+        _, cache = model.run_with_cache(batch_tokens)
+        for offset, label in enumerate([label for _, label in prompts[start:end]]):
+            token_index = token_indices[start + offset]
+            layer_acts = []
+            for layer in range(max_layers):
+                resid = cache["resid_pre", layer][offset, token_index].detach().cpu().numpy()
+                if show_vector and (start + offset) < show_count and layer == show_vector_layer:
+                    print("\n--- Probe vector inspection ---")
+                    print("Prompt index:", start + offset)
+                    print("Layer:", layer)
+                    print("Vector shape:", resid.shape)
+                    print("Vector L2 norm:", float(np.linalg.norm(resid)))
+                    print("Vector head (8):", np.array2string(resid[:8], precision=4))
+                layer_acts.append(resid)
+            activations.append(np.stack(layer_acts))
+            labels.append(label)
     return np.stack(activations), np.array(labels)
 
 
@@ -182,6 +198,7 @@ def run_probe(
     probe_template_id: int,
     drop_persona: bool,
     shuffle_labels: bool,
+    batch_size: int,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     start_time = time.perf_counter()
@@ -291,6 +308,7 @@ def run_probe(
         show_vector,
         show_vector_layer,
         probe_position,
+        batch_size,
     )
     if shuffle_labels:
         rng = np.random.default_rng(seed)
@@ -457,6 +475,12 @@ def main() -> None:
         help="Print timing for each stage of the probe run.",
     )
     parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size for activation extraction.",
+    )
+    parser.add_argument(
         "--probe_position",
         type=str,
         default="question_last_token",
@@ -530,6 +554,7 @@ def main() -> None:
         args.probe_template_id,
         args.drop_persona,
         args.shuffle_labels,
+        args.batch_size,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

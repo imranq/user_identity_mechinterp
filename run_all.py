@@ -46,6 +46,7 @@ def run_probe_experiment(
     probe_template_id: int,
     drop_persona: bool,
     shuffle_labels: bool,
+    batch_size: int,
     question_holdout: bool,
     model: HookedTransformer | None = None,
 ) -> None:
@@ -85,6 +86,7 @@ def run_probe_experiment(
         probe_template_id=probe_template_id,
         drop_persona=drop_persona,
         shuffle_labels=shuffle_labels,
+        batch_size=batch_size,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -299,6 +301,12 @@ def main() -> None:
         help="Pad persona strings to align the probe token index across classes.",
     )
     parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size for activation extraction.",
+    )
+    parser.add_argument(
         "--probe_template_id",
         type=int,
         default=0,
@@ -384,6 +392,7 @@ def main() -> None:
             args.probe_template_id,
             args.drop_persona,
             args.shuffle_labels,
+            args.batch_size,
             args.question_holdout,
             model=shared_model,
         )
