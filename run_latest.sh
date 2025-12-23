@@ -9,6 +9,6 @@ if [ "${#extra_args[@]}" -gt 0 ]; then
 fi
 
 python3 run_all.py --experiment probe --model_name google/gemma-2-2b-it \
-  --n_questions_per_pair 10 --template_holdout --max_layers 12 --min_layer 1 \
-  --device cuda --probe_position question_last_token --align_probe_index \
+  --n_questions_per_pair 10 \
+  --device cuda:0 --probe_position question_last_token --align_probe_index \
   "${extra_args[@]}" | tee latest_probe.txt

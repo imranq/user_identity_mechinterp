@@ -342,12 +342,14 @@ def main() -> None:
         else:
             device = args.device
         device_str = str(device)
+        if device_str.isdigit():
+            device_str = f"cuda:{device_str}"
         if device_str.startswith("cuda"):
             try:
                 torch.cuda.set_device(0)
             except Exception:
-                device = "cuda:0"
-        shared_model = HookedTransformer.from_pretrained(args.model_name, device=str(device))
+                device_str = "cuda:0"
+        shared_model = HookedTransformer.from_pretrained(args.model_name, device=device_str)
 
     if args.experiment in ["probe", "all"]:
         run_probe_experiment(

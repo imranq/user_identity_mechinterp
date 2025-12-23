@@ -201,12 +201,14 @@ def run_probe(
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
         device_str = str(device)
+        if device_str.isdigit():
+            device_str = f"cuda:{device_str}"
         if device_str.startswith("cuda"):
             try:
                 torch.cuda.set_device(0)
             except Exception:
-                device = "cuda:0"
-        model = HookedTransformer.from_pretrained(model_name, device=str(device))
+                device_str = "cuda:0"
+        model = HookedTransformer.from_pretrained(model_name, device=device_str)
         if show_timing:
             print(f"Timing: model load {time.perf_counter() - t0:.2f}s")
         device_name = device
