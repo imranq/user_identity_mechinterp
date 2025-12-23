@@ -20,3 +20,4 @@ __pycache__/
 # Outputs
 *.csv
 *.png
+.runpod_pod_id

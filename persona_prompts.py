@@ -251,6 +251,8 @@ def build_prompt_dataset(
         A list of PersonaExample objects.
     """
     rng = random.Random(seed)
+    if not pad_token:
+        pad_token = " X"
     pairs = [
         ("physics", "Physics Professor", "5-Year-Old Child"),
         ("auditor", "Skeptical Auditor", "Gullible Enthusiast"),
