@@ -93,7 +93,9 @@ def run_cot_experiment(model_name: str, use_hint: bool) -> None:
         print("Puzzle:", puzzle["id"])
         print("Hinted:", use_hint)
         print(f"Pivot layer (max absolute difference): {pivot_layer}")
-        print(f"Final layer logit diff ('{puzzle['choices'][0']}' - '{puzzle['choices'][1']}'): {diffs[-1]:.4f}")
+        print(
+            f"Final layer logit diff ('{puzzle['choices'][0]}' - '{puzzle['choices'][1]}'): {diffs[-1]:.4f}"
+        )
 
 
 def main() -> None:
