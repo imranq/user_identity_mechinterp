@@ -28,12 +28,21 @@ def apply_direction(
         return activation
 
     tokens = model.to_tokens(prompt)
-    patched_tokens = model.generate(
-        tokens,
-        max_new_tokens=80,
-        do_sample=False,
-        fwd_hooks=[(f"blocks.{layer}.hook_resid_pre", patch_hook)],
-    )
+    hook_name = f"blocks.{layer}.hook_resid_pre"
+    try:
+        with model.hooks(fwd_hooks=[(hook_name, patch_hook)]):
+            patched_tokens = model.generate(
+                tokens,
+                max_new_tokens=80,
+                do_sample=False,
+            )
+    except TypeError:
+        patched_tokens = model.generate(
+            tokens,
+            max_new_tokens=80,
+            do_sample=False,
+            hooks=[(hook_name, patch_hook)],
+        )
     return model.to_string(patched_tokens[0])
 
 
