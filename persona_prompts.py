@@ -6,7 +6,7 @@ and constructs a structured prompt for each.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Tuple
 import random
 
 # A constant string used as a marker to identify the persona part of the prompt.
@@ -188,30 +188,46 @@ def _pad_persona_to_length(
     return padded
 
 
-def _pad_until_probe_index(
+def _find_single_token_pad(tokenizer: Any, pad_token: str) -> str:
+    if len(tokenizer.to_tokens(pad_token, prepend_bos=False)[0].tolist()) == 1:
+        return pad_token
+    candidates = [" X", " Y", " Z", " .", " ,", " _", " -", " ~"]
+    for candidate in candidates:
+        if len(tokenizer.to_tokens(candidate, prepend_bos=False)[0].tolist()) == 1:
+            return candidate
+    raise ValueError("Could not find a single-token pad string for this tokenizer")
+
+
+def _probe_index_for_prompt(
+    base_template: str,
+    persona: str,
+    question: str,
+    tokenizer: Any,
+) -> int:
+    prompt = base_template.format(
+        persona_marker=PERSONA_MARKER,
+        persona=persona,
+        question=question,
+    )
+    prefix, sep, _ = prompt.rpartition("Answer:")
+    if not sep:
+        raise ValueError("Prompt does not contain 'Answer:' marker")
+    return len(tokenizer.to_tokens(prefix)[0].tolist()) - 1
+
+
+def _pad_persona_to_probe_index(
     base_template: str,
     persona: str,
     question: str,
     tokenizer: Any,
     pad_token: str,
     target_index: int,
-    max_pad_steps: int = 50,
 ) -> str:
-    padded = persona
-    for _ in range(max_pad_steps):
-        prompt = base_template.format(
-            persona_marker=PERSONA_MARKER,
-            persona=padded,
-            question=question,
-        )
-        prefix, sep, _ = prompt.rpartition("Answer:")
-        if not sep:
-            raise ValueError("Prompt does not contain 'Answer:' marker")
-        probe_index = len(tokenizer.to_tokens(prefix)[0].tolist()) - 1
-        if probe_index == target_index:
-            return padded
-        padded = f"{padded}{pad_token}"
-    raise ValueError("Failed to align probe token index within max_pad_steps")
+    current_index = _probe_index_for_prompt(base_template, persona, question, tokenizer)
+    delta = target_index - current_index
+    if delta <= 0:
+        return persona
+    return f"{persona}{pad_token * delta}"
 
 
 def build_prompt_dataset(
@@ -255,6 +271,7 @@ def build_prompt_dataset(
             expert_len = len(tokenizer.to_tokens(expert, prepend_bos=False)[0].tolist())
             novice_len = len(tokenizer.to_tokens(novice, prepend_bos=False)[0].tolist())
             target_len = max(expert_len, novice_len)
+            pad_token = _find_single_token_pad(tokenizer, pad_token)
             expert_name = _pad_persona_to_length(expert, target_len, tokenizer, pad_token)
             novice_name = _pad_persona_to_length(novice, target_len, tokenizer, pad_token)
             persona_variants = [expert_name, novice_name]
@@ -262,20 +279,19 @@ def build_prompt_dataset(
             persona_variants = [expert, novice]
 
         for question_id, question in enumerate(selected_questions):
-            target_index = None
+            target_index: Optional[int] = None
             if align_probe_index:
                 if tokenizer is None:
                     raise ValueError("tokenizer is required when align_probe_index is True")
+                pad_token = _find_single_token_pad(tokenizer, pad_token)
                 base_template = PROMPT_TEMPLATES[probe_template_id]
-                expert_prompt = base_template.format(
-                    persona_marker=PERSONA_MARKER,
-                    persona=persona_variants[0],
-                    question=question,
+                expert_index = _probe_index_for_prompt(
+                    base_template, persona_variants[0], question, tokenizer
                 )
-                prefix, sep, _ = expert_prompt.rpartition("Answer:")
-                if not sep:
-                    raise ValueError("Prompt does not contain 'Answer:' marker")
-                target_index = len(tokenizer.to_tokens(prefix)[0].tolist()) - 1
+                novice_index = _probe_index_for_prompt(
+                    base_template, persona_variants[1], question, tokenizer
+                )
+                target_index = max(expert_index, novice_index)
             for template_id, template in enumerate(PROMPT_TEMPLATES):
                 for label, persona in enumerate([expert, novice]):
                     persona_name = persona_variants[label]
@@ -285,7 +301,7 @@ def build_prompt_dataset(
                         base_template = PROMPT_TEMPLATES[probe_template_id]
                         if target_index is None:
                             raise ValueError("Target probe index was not computed")
-                        persona_name = _pad_until_probe_index(
+                        persona_name = _pad_persona_to_probe_index(
                             base_template=base_template,
                             persona=persona_name,
                             question=question,
