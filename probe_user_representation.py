@@ -135,6 +135,9 @@ def run_probe(
     show_vector_layer: int,
     show_examples: bool,
     show_examples_count: int,
+    show_embedding_table: bool,
+    show_embedding_table_rows: int,
+    show_embedding_table_dims: int,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     """
@@ -204,6 +207,16 @@ def run_probe(
         show_vector,
         show_vector_layer,
     )
+
+    if show_embedding_table:
+        layer_idx = max(0, min(show_vector_layer, n_layers - 1))
+        rows = min(show_embedding_table_rows, X_all.shape[0])
+        dims = min(show_embedding_table_dims, X_all.shape[2])
+        table = pd.DataFrame(X_all[:rows, layer_idx, :dims])
+        table.insert(0, "label", y[:rows])
+        print("\n--- Probe embedding table ---")
+        print(f"Layer: {layer_idx} | Rows: {rows} | Dims: {dims}")
+        print(table.to_string(index=False))
 
     results = []
     start_layer = max(0, min_layer)
@@ -311,6 +324,23 @@ def main() -> None:
         default=5,
         help="Number of prompt/label pairs to show when --show_probe_examples is set.",
     )
+    parser.add_argument(
+        "--show_embedding_table",
+        action="store_true",
+        help="Print a table of embedding vectors and labels before training.",
+    )
+    parser.add_argument(
+        "--show_embedding_table_rows",
+        type=int,
+        default=5,
+        help="Number of rows to show in the embedding table.",
+    )
+    parser.add_argument(
+        "--show_embedding_table_dims",
+        type=int,
+        default=8,
+        help="Number of embedding dimensions to show in the table.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -329,6 +359,9 @@ def main() -> None:
         args.show_probe_vector_layer,
         args.show_probe_examples,
         args.show_probe_examples_count,
+        args.show_embedding_table,
+        args.show_embedding_table_rows,
+        args.show_embedding_table_dims,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

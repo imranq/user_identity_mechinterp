@@ -34,6 +34,9 @@ def run_probe_experiment(
     show_probe_vector_layer: int,
     show_probe_examples: bool,
     show_probe_examples_count: int,
+    show_embedding_table: bool,
+    show_embedding_table_rows: int,
+    show_embedding_table_dims: int,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -60,6 +63,9 @@ def run_probe_experiment(
         show_probe_vector_layer,
         show_probe_examples,
         show_probe_examples_count,
+        show_embedding_table,
+        show_embedding_table_rows,
+        show_embedding_table_dims,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -229,6 +235,23 @@ def main() -> None:
         help="Number of prompt/label pairs to show when --show_probe_examples is set.",
     )
     parser.add_argument(
+        "--show_embedding_table",
+        action="store_true",
+        help="Print a table of embedding vectors and labels before training.",
+    )
+    parser.add_argument(
+        "--show_embedding_table_rows",
+        type=int,
+        default=5,
+        help="Number of rows to show in the embedding table.",
+    )
+    parser.add_argument(
+        "--show_embedding_table_dims",
+        type=int,
+        default=8,
+        help="Number of embedding dimensions to show in the table.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -269,6 +292,9 @@ def main() -> None:
             args.show_probe_vector_layer,
             args.show_probe_examples,
             args.show_probe_examples_count,
+            args.show_embedding_table,
+            args.show_embedding_table_rows,
+            args.show_embedding_table_dims,
             model=shared_model,
         )
 
