@@ -71,6 +71,8 @@ def extract_layer_activations(
     model: HookedTransformer,
     prompts: List[Tuple[str, int]],
     max_layers: int,
+    show_tokens: bool,
+    show_count: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts activations for all layers up to max_layers for a list of prompts.
@@ -87,8 +89,19 @@ def extract_layer_activations(
     """
     activations = []
     labels = []
-    for prompt, label in tqdm(prompts, desc="Extracting activations", unit="prompt"):
+    for idx, (prompt, label) in enumerate(
+        tqdm(prompts, desc="Extracting activations", unit="prompt")
+    ):
         token_index = get_persona_token_index(model, prompt)
+        if show_tokens and idx < show_count:
+            tokens = model.to_str_tokens(prompt)
+            marker_tokens = model.to_str_tokens(PERSONA_MARKER, prepend_bos=False)
+            print("\n--- Probe token inspection ---")
+            print("Prompt index:", idx)
+            print("Label:", label)
+            print("Marker tokens:", marker_tokens)
+            print("Probe token index:", token_index)
+            print("Probe token string:", tokens[token_index])
         _, cache = model.run_with_cache(prompt)
         layer_acts = []
         for layer in range(max_layers):
@@ -107,6 +120,8 @@ def run_probe(
     max_layers: int,
     device: str,
     min_layer: int,
+    show_tokens: bool,
+    show_count: int,
 ) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
@@ -139,7 +154,9 @@ def run_probe(
         train_indices, test_indices = None, None
 
     n_layers = min(model.cfg.n_layers, max_layers)
-    X_all, y = extract_layer_activations(model, prompts, n_layers)
+    X_all, y = extract_layer_activations(
+        model, prompts, n_layers, show_tokens, show_count
+    )
 
     results = []
     start_layer = max(0, min_layer)
@@ -214,6 +231,17 @@ def main() -> None:
         default="auto",
         help="Device to use: auto/cpu/cuda.",
     )
+    parser.add_argument(
+        "--show_probe_tokens",
+        action="store_true",
+        help="Print the token that the probe regresses on for a few prompts.",
+    )
+    parser.add_argument(
+        "--show_probe_count",
+        type=int,
+        default=3,
+        help="Number of prompts to show when --show_probe_tokens is set.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -226,6 +254,8 @@ def main() -> None:
         args.max_layers,
         args.device,
         args.min_layer,
+        args.show_probe_tokens,
+        args.show_probe_count,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)

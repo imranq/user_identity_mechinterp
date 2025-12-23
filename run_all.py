@@ -27,6 +27,8 @@ def run_probe_experiment(
     max_layers: int,
     device: str,
     min_layer: int,
+    show_probe_tokens: bool,
+    show_probe_count: int,
 ) -> None:
     """
     Runs the linear probe experiment and saves the results.
@@ -46,6 +48,8 @@ def run_probe_experiment(
         max_layers,
         device,
         min_layer,
+        show_probe_tokens,
+        show_probe_count,
     )
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
@@ -169,6 +173,17 @@ def main() -> None:
         default="auto",
         help="Device to use: auto/cpu/cuda.",
     )
+    parser.add_argument(
+        "--show_probe_tokens",
+        action="store_true",
+        help="Print the token that the probe regresses on for a few prompts.",
+    )
+    parser.add_argument(
+        "--show_probe_count",
+        type=int,
+        default=3,
+        help="Number of prompts to show when --show_probe_tokens is set.",
+    )
 
     # Arguments for the activation patching experiment
     parser.add_argument("--pair_id", type=str, default="physics", help="Persona pair ID for patching (e.g., 'physics').")
@@ -191,6 +206,8 @@ def main() -> None:
             args.max_layers,
             args.device,
             args.min_layer,
+            args.show_probe_tokens,
+            args.show_probe_count,
         )
 
     if args.experiment in ["patch", "all"]:
