@@ -33,8 +33,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Persona steering demo.")
     parser.add_argument("--model_name", type=str, default="google/gemma-2-2b-it")
     parser.add_argument("--direction_path", type=str, default="persona_direction.npy")
-    parser.add_argument("--layer", type=int, default=4)
-    parser.add_argument("--alpha", type=float, default=8.0)
+    parser.add_argument("--layers", type=str, default="4", help="Comma-separated layer list.")
+    parser.add_argument("--alphas", type=str, default="8.0", help="Comma-separated alpha list.")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--max_new_tokens", type=int, default=120)
     parser.add_argument("--template_id", type=int, default=0)
@@ -52,15 +52,12 @@ def main() -> None:
         prompts = Path(args.prompts_path).read_text().strip().splitlines()
         prompts = [p for p in prompts if p.strip()]
 
+    layers = [int(x.strip()) for x in args.layers.split(",") if x.strip()]
+    alphas = [float(x.strip()) for x in args.alphas.split(",") if x.strip()]
+
     model = HookedTransformer.from_pretrained(args.model_name, device=device)
     direction = np.load(args.direction_path)
     direction_t = torch.tensor(direction, device=model.cfg.device, dtype=torch.float32)
-
-    hook_name = f"blocks.{args.layer}.hook_resid_pre"
-
-    def steer_hook(activation, hook):
-        activation[:, :] = activation + args.alpha * direction_t
-        return activation
 
     outputs: List[Dict[str, str]] = []
     for q in prompts:
@@ -69,34 +66,43 @@ def main() -> None:
         clean_tokens = model.generate(tokens, max_new_tokens=args.max_new_tokens, do_sample=False)
         clean_text = model.to_string(clean_tokens[0])
 
-        try:
-            with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
-                steered_tokens = model.generate(
-                    tokens, max_new_tokens=args.max_new_tokens, do_sample=False
-                )
-        except TypeError:
-            steered_tokens = model.generate(
-                tokens, max_new_tokens=args.max_new_tokens, do_sample=False, hooks=[(hook_name, steer_hook)]
-            )
-        steered_text = model.to_string(steered_tokens[0])
-
-        outputs.append(
-            {
-                "question": q,
-                "prompt": prompt,
-                "clean_output": clean_text,
-                "steered_output": steered_text,
-                "alpha": args.alpha,
-                "layer": args.layer,
-            }
-        )
-
         print("\n=== Question ===")
         print(q)
         print("\n--- Clean ---")
         print(clean_text)
-        print("\n--- Steered ---")
-        print(steered_text)
+
+        for layer in layers:
+            hook_name = f"blocks.{layer}.hook_resid_pre"
+            for alpha in alphas:
+                def steer_hook(activation, hook):
+                    activation[:, :] = activation + alpha * direction_t
+                    return activation
+
+                try:
+                    with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
+                        steered_tokens = model.generate(
+                            tokens, max_new_tokens=args.max_new_tokens, do_sample=False
+                        )
+                except TypeError:
+                    steered_tokens = model.generate(
+                        tokens,
+                        max_new_tokens=args.max_new_tokens,
+                        do_sample=False,
+                        hooks=[(hook_name, steer_hook)],
+                    )
+                steered_text = model.to_string(steered_tokens[0])
+                outputs.append(
+                    {
+                        "question": q,
+                        "prompt": prompt,
+                        "clean_output": clean_text,
+                        "steered_output": steered_text,
+                        "alpha": alpha,
+                        "layer": layer,
+                    }
+                )
+                print(f"\n--- Steered (layer={layer}, alpha={alpha}) ---")
+                print(steered_text)
 
     Path(args.out_path).write_text("\n".join(json.dumps(o) for o in outputs))
     print("\nWrote:", args.out_path)
