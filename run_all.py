@@ -73,14 +73,14 @@ def run_probe_experiment(
         model=model,
     )
     df.to_csv(save_path, index=False)
-    best_row = df.loc[df["accuracy"].idxmax()]
+    best_row = df.loc[df["balanced_accuracy"].idxmax()]
     print("\n--- Probe Experiment Results ---")
     print("Probe results saved to", save_path)
     print(df.to_string(index=False))
     print(
         "Best layer for persona representation:",
         int(best_row["layer"]),
-        f"(Accuracy: {best_row['accuracy']:.4f}, AUC: {best_row['auc']:.4f})",
+        f"(Balanced Acc: {best_row['balanced_accuracy']:.4f}, AUC: {best_row['auc']:.4f})",
     )
 
 
@@ -263,8 +263,8 @@ def main() -> None:
     parser.add_argument(
         "--probe_position",
         type=str,
-        default="question_end",
-        choices=["persona", "question_end", "prompt_end"],
+        default="question_last_token",
+        choices=["persona", "question_end", "question_last_token", "prompt_end"],
         help="Token position to probe.",
     )
     parser.add_argument(

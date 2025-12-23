@@ -21,7 +21,7 @@ import pandas as pd
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, balanced_accuracy_score, roc_curve
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
@@ -86,6 +86,17 @@ def get_probe_token_index(
         if len(prefix_tokens) == 0:
             raise ValueError("Question prefix tokenization is empty")
         return len(prefix_tokens) - 1
+    if position == "question_last_token":
+        prefix, sep, _ = prompt.rpartition("Answer:")
+        if not sep:
+            raise ValueError("Prompt does not contain 'Answer:' marker")
+        prefix_str_tokens = model.to_str_tokens(prefix)
+        if len(prefix_str_tokens) == 0:
+            raise ValueError("Question prefix tokenization is empty")
+        for idx in range(len(prefix_str_tokens) - 1, -1, -1):
+            if prefix_str_tokens[idx].strip() != "":
+                return idx
+        raise ValueError("No non-whitespace token found in question prefix")
     raise ValueError(f"Unknown probe position: {position}")
 
 def extract_layer_activations(
@@ -279,9 +290,25 @@ def run_probe(
         if len(set(y_test)) > 1:
             y_prob = clf.predict_proba(X_test)[:, 1]
             auc = roc_auc_score(y_test, y_prob)
+            fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+            balanced_scores = (tpr + (1 - fpr)) / 2
+            best_idx = int(np.argmax(balanced_scores))
+            best_thresh = float(thresholds[best_idx])
+            bal_acc = float(balanced_scores[best_idx])
         else:
+            y_prob = None
             auc = float("nan")
-        results.append({"layer": layer, "accuracy": acc, "auc": auc})
+            bal_acc = float("nan")
+            best_thresh = float("nan")
+        results.append(
+            {
+                "layer": layer,
+                "accuracy": acc,
+                "balanced_accuracy": bal_acc,
+                "auc": auc,
+                "best_threshold": best_thresh,
+            }
+        )
     if show_timing:
         print(f"Timing: probe training {time.perf_counter() - t3:.2f}s")
         print(f"Timing: total run {time.perf_counter() - start_time:.2f}s")
@@ -390,8 +417,8 @@ def main() -> None:
     parser.add_argument(
         "--probe_position",
         type=str,
-        default="question_end",
-        choices=["persona", "question_end", "prompt_end"],
+        default="question_last_token",
+        choices=["persona", "question_end", "question_last_token", "prompt_end"],
         help="Token position to probe.",
     )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
