@@ -331,7 +331,7 @@ def run_probe(
     t3 = time.perf_counter()
     for layer in tqdm(range(start_layer, n_layers), desc="Training probes", unit="layer"):
         X = X_all[:, layer, :]
-        if template_holdout:
+        if template_holdout or question_holdout:
             X_train = X[train_indices]
             y_train = y[train_indices]
             X_test = X[test_indices]
