@@ -334,6 +334,8 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"Running experiment(s): '{args.experiment}' with model '{args.model_name}'")
+    if args.experiment == "all":
+        print("Reuse model:", args.reuse_model)
 
     shared_model = None
     if args.reuse_model and args.experiment in ["probe", "patch", "cot", "all"]:

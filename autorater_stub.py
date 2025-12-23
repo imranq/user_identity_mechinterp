@@ -29,6 +29,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = load_outputs(args.input_path)
+    print("Loaded outputs:", len(rows))
     with open(args.output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(

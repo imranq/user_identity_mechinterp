@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import torch
 from sklearn.linear_model import LogisticRegression
+from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
 from persona_prompts import build_prompt_dataset
@@ -20,7 +21,7 @@ def extract_activations(
 ) -> Tuple[np.ndarray, np.ndarray]:
     activations = []
     labels = []
-    for prompt, label in prompts:
+    for prompt, label in tqdm(prompts, desc="Extracting activations", unit="prompt"):
         token_index = get_probe_token_index(model, prompt, probe_position)
         _, cache = model.run_with_cache(prompt)
         resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
@@ -72,6 +73,11 @@ def main() -> None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
+    print("Model:", args.model_name)
+    print("Device:", device)
+    print("Layer:", args.layer)
+    print("Probe position:", args.probe_position)
+    print("Method:", args.method)
 
     model = HookedTransformer.from_pretrained(args.model_name, device=device)
     prompt_objs = build_prompt_dataset(
@@ -85,6 +91,7 @@ def main() -> None:
         drop_persona=False,
     )
     prompts = [(p.prompt, p.label) for p in prompt_objs]
+    print("Examples:", len(prompts))
 
     X, y = extract_activations(model, prompts, args.layer, args.probe_position)
     if args.method == "mean":

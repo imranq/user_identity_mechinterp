@@ -5,6 +5,7 @@ from typing import Dict, List
 
 import numpy as np
 import torch
+from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
 from persona_prompts import build_prompt_dataset
@@ -56,9 +57,15 @@ def main() -> None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
+    print("Model:", args.model_name)
+    print("Device:", device)
+    print("Layer:", args.layer)
+    print("Probe position:", args.probe_position)
+    print("Alpha:", args.alpha)
 
     model = HookedTransformer.from_pretrained(args.model_name, device=device)
     direction = np.load(args.direction_path)
+    print("Direction shape:", direction.shape)
 
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=args.n_questions_per_pair,
@@ -72,7 +79,7 @@ def main() -> None:
     )
 
     outputs: List[Dict[str, str]] = []
-    for item in prompt_objs:
+    for item in tqdm(prompt_objs, desc="Patching prompts", unit="prompt"):
         prompt = item.prompt
         tokens = model.to_tokens(prompt)
         clean_tokens = model.generate(tokens, max_new_tokens=80, do_sample=False)
@@ -100,6 +107,7 @@ def main() -> None:
         )
 
     Path(args.out_path).write_text("\n".join(json.dumps(o) for o in outputs))
+    print("Total outputs:", len(outputs))
     print("Saved outputs to", args.out_path)
 
 
