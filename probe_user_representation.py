@@ -160,6 +160,7 @@ def run_probe(
     seed: int,
     n_questions_per_pair: int,
     template_holdout: bool,
+    question_holdout: bool,
     max_layers: int,
     device: str,
     min_layer: int,
@@ -224,7 +225,8 @@ def run_probe(
     template_ids = [p.template_id for p in prompt_objs]
     pair_ids = sorted({p.pair_id for p in prompt_objs})
     unique_templates = sorted(set(template_ids))
-    question_ids = sorted({p.question_id for p in prompt_objs})
+    question_ids = [p.question_id for p in prompt_objs]
+    unique_question_ids = sorted(set(question_ids))
 
     print("\n--- Probe configuration ---")
     print("Model:", display_name)
@@ -232,7 +234,7 @@ def run_probe(
     print("Examples:", len(prompts))
     print("Pairs:", ", ".join(pair_ids))
     print("Questions per pair:", n_questions_per_pair)
-    print("Unique questions:", len(question_ids))
+    print("Unique questions:", len(unique_question_ids))
     print("Templates:", unique_templates)
     print("Template holdout:", template_holdout)
     print("Probe position:", probe_position)
@@ -244,6 +246,7 @@ def run_probe(
         print("Probe template id:", probe_template_id)
     print("Drop persona:", drop_persona)
     print("Shuffle labels:", shuffle_labels)
+    print("Question holdout:", question_holdout)
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if show_examples:
@@ -254,7 +257,11 @@ def run_probe(
                 preview = preview[:240] + "..."
             print(f"[{idx}] label={label} prompt='{preview}'")
 
-    if template_holdout:
+    if question_holdout:
+        test_question = unique_question_ids[-1]
+        train_indices = [i for i, q_id in enumerate(question_ids) if q_id != test_question]
+        test_indices = [i for i, q_id in enumerate(question_ids) if q_id == test_question]
+    elif template_holdout:
         test_template = unique_templates[-1]
         train_indices = [i for i, t_id in enumerate(template_ids) if t_id != test_template]
         test_indices = [i for i, t_id in enumerate(template_ids) if t_id == test_template]
@@ -476,6 +483,11 @@ def main() -> None:
         action="store_true",
         help="Shuffle labels before training as a control.",
     )
+    parser.add_argument(
+        "--question_holdout",
+        action="store_true",
+        help="Hold out one question id for testing instead of template holdout.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -485,6 +497,7 @@ def main() -> None:
         args.seed,
         args.n_questions_per_pair,
         args.template_holdout,
+        args.question_holdout,
         args.max_layers,
         args.device,
         args.min_layer,

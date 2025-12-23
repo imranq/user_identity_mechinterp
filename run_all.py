@@ -45,6 +45,7 @@ def run_probe_experiment(
     probe_template_id: int,
     drop_persona: bool,
     shuffle_labels: bool,
+    question_holdout: bool,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -82,6 +83,7 @@ def run_probe_experiment(
         probe_template_id,
         drop_persona,
         shuffle_labels,
+        question_holdout,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -312,6 +314,11 @@ def main() -> None:
         help="Shuffle labels before training as a control.",
     )
     parser.add_argument(
+        "--question_holdout",
+        action="store_true",
+        help="Hold out one question id for testing instead of template holdout.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -363,6 +370,7 @@ def main() -> None:
             args.probe_template_id,
             args.drop_persona,
             args.shuffle_labels,
+            args.question_holdout,
             model=shared_model,
         )
 
