@@ -13,7 +13,7 @@ The process is as follows:
 """
 
 import argparse
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -133,6 +133,7 @@ def run_probe(
     show_count: int,
     show_vector: bool,
     show_vector_layer: int,
+    model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
@@ -146,9 +147,15 @@ def run_probe(
     """
     torch.manual_seed(seed)
     np.random.seed(seed)
-    if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = HookedTransformer.from_pretrained(model_name, device=device)
+    if model is None:
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = HookedTransformer.from_pretrained(model_name, device=device)
+        device_name = device
+        display_name = model_name
+    else:
+        device_name = str(model.cfg.device)
+        display_name = getattr(model.cfg, "model_name", model_name)
     prompt_objs = build_prompt_dataset(
         n_questions_per_pair=n_questions_per_pair,
         seed=seed,
@@ -160,8 +167,8 @@ def run_probe(
     question_ids = sorted({p.question_id for p in prompt_objs})
 
     print("\n--- Probe configuration ---")
-    print("Model:", model_name)
-    print("Device:", device)
+    print("Model:", display_name)
+    print("Device:", device_name)
     print("Examples:", len(prompts))
     print("Pairs:", ", ".join(pair_ids))
     print("Questions per pair:", n_questions_per_pair)

@@ -16,6 +16,7 @@ from persona_prompts import build_prompts
 from cot_faithfulness import logit_lens_scores, PUZZLES
 from transformer_lens import HookedTransformer
 import numpy as np
+import torch
 
 
 def run_probe_experiment(
@@ -31,6 +32,7 @@ def run_probe_experiment(
     show_probe_count: int,
     show_probe_vector: bool,
     show_probe_vector_layer: int,
+    model: HookedTransformer | None = None,
 ) -> None:
     """
     Runs the linear probe experiment and saves the results.
@@ -54,6 +56,7 @@ def run_probe_experiment(
         show_probe_count,
         show_probe_vector,
         show_probe_vector_layer,
+        model=model,
     )
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
@@ -67,7 +70,12 @@ def run_probe_experiment(
     )
 
 
-def run_patch_experiment(model_name: str, pair_id: str, layer: int) -> None:
+def run_patch_experiment(
+    model_name: str,
+    pair_id: str,
+    layer: int,
+    model: HookedTransformer | None = None,
+) -> None:
     """
     Runs the activation patching experiment.
 
@@ -78,7 +86,8 @@ def run_patch_experiment(model_name: str, pair_id: str, layer: int) -> None:
         pair_id: The ID of the persona pair to use.
         layer: The layer to perform the patching on.
     """
-    model = HookedTransformer.from_pretrained(model_name, device="cpu")
+    if model is None:
+        model = HookedTransformer.from_pretrained(model_name, device="cpu")
     prompts = [p for p in build_prompts() if p.pair_id == pair_id]
     if len(prompts) != 2:
         raise ValueError("pair_id not found or not exactly two prompts")
@@ -101,7 +110,11 @@ def run_patch_experiment(model_name: str, pair_id: str, layer: int) -> None:
     print(f"Change in logit diff due to patching: {results['delta']:.4f}")
 
 
-def run_cot_experiment(model_name: str, use_hint: bool) -> None:
+def run_cot_experiment(
+    model_name: str,
+    use_hint: bool,
+    model: HookedTransformer | None = None,
+) -> None:
     """
     Runs the Chain-of-Thought / logit lens experiment.
 
@@ -111,7 +124,8 @@ def run_cot_experiment(model_name: str, use_hint: bool) -> None:
         model_name: The name of the model to use.
         use_hint: Whether to include the misleading hint in the prompt.
     """
-    model = HookedTransformer.from_pretrained(model_name, device="cpu")
+    if model is None:
+        model = HookedTransformer.from_pretrained(model_name, device="cpu")
     for puzzle in PUZZLES:
         prefix = puzzle["hinted"] if use_hint else ""
         prompt = f"{prefix}{puzzle['question']}\nAnswer:"
@@ -199,6 +213,11 @@ def main() -> None:
         default=1,
         help="Layer to print probe vectors for when --show_probe_vector is set.",
     )
+    parser.add_argument(
+        "--reuse_model",
+        action="store_true",
+        help="Load the model once and reuse it across experiments.",
+    )
 
     # Arguments for the activation patching experiment
     parser.add_argument("--pair_id", type=str, default="physics", help="Persona pair ID for patching (e.g., 'physics').")
@@ -210,6 +229,14 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"Running experiment(s): '{args.experiment}' with model '{args.model_name}'")
+
+    shared_model = None
+    if args.reuse_model and args.experiment in ["probe", "patch", "cot", "all"]:
+        if args.device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = args.device
+        shared_model = HookedTransformer.from_pretrained(args.model_name, device=device)
 
     if args.experiment in ["probe", "all"]:
         run_probe_experiment(
@@ -225,6 +252,7 @@ def main() -> None:
             args.show_probe_count,
             args.show_probe_vector,
             args.show_probe_vector_layer,
+            model=shared_model,
         )
 
     if args.experiment in ["patch", "all"]:
@@ -239,10 +267,10 @@ def main() -> None:
             except FileNotFoundError:
                 print(f"Could not find probe results at {args.save_path}, using default layer {args.layer} for patching.")
         
-        run_patch_experiment(args.model_name, args.pair_id, layer_for_patching)
+        run_patch_experiment(args.model_name, args.pair_id, layer_for_patching, model=shared_model)
 
     if args.experiment in ["cot", "all"]:
-        run_cot_experiment(args.model_name, args.use_hint)
+        run_cot_experiment(args.model_name, args.use_hint, model=shared_model)
 
 
 if __name__ == "__main__":
