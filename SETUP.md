@@ -114,5 +114,12 @@ mats/ioi_replication/runpod_ioi.sh terminate
 ```bash
 python run_all.py --experiment probe --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12
 python run_all.py --experiment all --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12 --reuse_model
+
+## Persona direction + patching workflow
+```bash
+python compute_persona_direction.py --layer 4 --probe_position question_last_token --align_probe_index
+python persona_patching_runner.py --direction_path persona_direction.npy --layer 4 --alpha 3.0 --align_probe_index
+python autorater_stub.py --input_path patched_outputs.jsonl
+```
 python run_all.py --experiment patch --model_name gpt2 --pair_id physics
 ```
