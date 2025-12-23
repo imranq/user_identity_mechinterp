@@ -238,6 +238,7 @@ def build_prompt_dataset(
     pad_token: str = " X",
     align_probe_index: bool = False,
     probe_template_id: int = 0,
+    drop_persona: bool = False,
 ) -> List[PersonaExample]:
     """
     Build a larger prompt dataset with multiple questions and templates per persona pair.
@@ -315,6 +316,10 @@ def build_prompt_dataset(
                         persona=persona_name,
                         question=question,
                     )
+                    if drop_persona:
+                        prompt_lines = prompt.splitlines()
+                        if prompt_lines:
+                            prompt = "\n".join(prompt_lines[1:])
                     examples.append(
                         PersonaExample(
                             pair_id=pair_id,

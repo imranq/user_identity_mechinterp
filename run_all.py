@@ -43,6 +43,8 @@ def run_probe_experiment(
     persona_pad_token: str,
     align_probe_index: bool,
     probe_template_id: int,
+    drop_persona: bool,
+    shuffle_labels: bool,
     model: HookedTransformer | None = None,
 ) -> None:
     """
@@ -78,6 +80,8 @@ def run_probe_experiment(
         persona_pad_token,
         align_probe_index,
         probe_template_id,
+        drop_persona,
+        shuffle_labels,
         model=model,
     )
     df.to_csv(save_path, index=False)
@@ -298,6 +302,16 @@ def main() -> None:
         help="Template id used to align probe index when --align_probe_index is set.",
     )
     parser.add_argument(
+        "--drop_persona",
+        action="store_true",
+        help="Remove the persona line from prompts as a control.",
+    )
+    parser.add_argument(
+        "--shuffle_labels",
+        action="store_true",
+        help="Shuffle labels before training as a control.",
+    )
+    parser.add_argument(
         "--reuse_model",
         action="store_true",
         help="Load the model once and reuse it across experiments.",
@@ -347,6 +361,8 @@ def main() -> None:
             args.persona_pad_token,
             args.align_probe_index,
             args.probe_template_id,
+            args.drop_persona,
+            args.shuffle_labels,
             model=shared_model,
         )
 

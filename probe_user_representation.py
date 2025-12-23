@@ -178,6 +178,8 @@ def run_probe(
     pad_token: str,
     align_probe_index: bool,
     probe_template_id: int,
+    drop_persona: bool,
+    shuffle_labels: bool,
     model: Optional[HookedTransformer] = None,
 ) -> pd.DataFrame:
     start_time = time.perf_counter()
@@ -214,6 +216,7 @@ def run_probe(
         pad_token=pad_token,
         align_probe_index=align_probe_index,
         probe_template_id=probe_template_id,
+        drop_persona=drop_persona,
     )
     if show_timing:
         print(f"Timing: dataset build {time.perf_counter() - t1:.2f}s")
@@ -239,6 +242,8 @@ def run_probe(
     print("Align probe index:", align_probe_index)
     if align_probe_index:
         print("Probe template id:", probe_template_id)
+    print("Drop persona:", drop_persona)
+    print("Shuffle labels:", shuffle_labels)
     print("Layer range:", f"{max(0, min_layer)}..{min(model.cfg.n_layers - 1, max_layers - 1)}")
 
     if show_examples:
@@ -268,6 +273,9 @@ def run_probe(
         show_vector_layer,
         probe_position,
     )
+    if shuffle_labels:
+        rng = np.random.default_rng(seed)
+        rng.shuffle(y)
     if show_timing:
         print(f"Timing: activation extraction {time.perf_counter() - t2:.2f}s")
 
@@ -458,6 +466,16 @@ def main() -> None:
         default=0,
         help="Template id used to align probe index when --align_probe_index is set.",
     )
+    parser.add_argument(
+        "--drop_persona",
+        action="store_true",
+        help="Remove the persona line from prompts as a control.",
+    )
+    parser.add_argument(
+        "--shuffle_labels",
+        action="store_true",
+        help="Shuffle labels before training as a control.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
@@ -485,6 +503,8 @@ def main() -> None:
         args.persona_pad_token,
         args.align_probe_index,
         args.probe_template_id,
+        args.drop_persona,
+        args.shuffle_labels,
     )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
