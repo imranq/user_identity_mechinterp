@@ -24,21 +24,23 @@ This follows the same flow as `ioi_replication/RUNPOD_INSTRUCTIONS.md`, adjusted
 Use a GPU with at least 24GB VRAM (1x L40S or 1x A100 40GB) and a PyTorch template.
 
 ```bash
-chmod +x mats/ioi_replication/runpod_ioi.sh
+chmod +x mats/user_identity_mechinterp/runpod_user_identity.sh
 export RUNPOD_API_KEY="YOUR_API_KEY"
-export RUNPOD_GPU_TYPE_ID="YOUR_GPU_TYPE_ID"
+export RUNPOD_GPU_TYPE="NVIDIA GeForce RTX 4090"
 export RUNPOD_POD_NAME="user-identity-mechinterp"
 export RUNPOD_IMAGE_NAME="runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04"
 export RUNPOD_CONTAINER_DISK_GB=50
 export RUNPOD_VOLUME_GB=50
 export RUNPOD_MIN_VCPU=8
 export RUNPOD_MIN_MEM_GB=30
-mats/ioi_replication/runpod_ioi.sh create
+# Optional: pass tokens into the pod at creation time
+export RUNPOD_ENV="HF_TOKEN=...,GITHUB_TOKEN=..."
+mats/user_identity_mechinterp/runpod_user_identity.sh create
 ```
 
 ### Connect
 ```bash
-mats/ioi_replication/runpod_ioi.sh ssh
+mats/user_identity_mechinterp/runpod_user_identity.sh ssh
 ```
 
 ### Upload or clone the repo
@@ -64,7 +66,7 @@ source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
 pip install transformer_lens nnsight jaxtyping einops
-huggingface-cli login
+huggingface-cli login --token "$HF_TOKEN"
 ```
 
 ### Run experiments
@@ -75,7 +77,21 @@ python run_all.py --experiment patch --model_name google/gemma-3-4b-it --pair_id
 
 ### Tear down
 ```bash
-mats/ioi_replication/runpod_ioi.sh terminate
+mats/user_identity_mechinterp/runpod_user_identity.sh terminate
+```
+
+## Git auth on the pod (avoid password prompts)
+Use SSH (recommended):
+```bash
+ssh-keygen -t ed25519 -C "runpod"
+cat ~/.ssh/id_ed25519.pub
+# add the key to GitHub, then:
+git remote set-url origin git@github.com:imranq/user_identity_mechinterp.git
+```
+
+Or cache HTTPS credentials for 24 hours:
+```bash
+git config --global credential.helper 'cache --timeout=86400'
 ```
 
 ## Research brief: Persona-Reasoning Bottleneck (Gemma 3)
@@ -114,12 +130,12 @@ mats/ioi_replication/runpod_ioi.sh terminate
 ```bash
 python run_all.py --experiment probe --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12
 python run_all.py --experiment all --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12 --reuse_model
+```
 
 ## Persona direction + patching workflow
 ```bash
 python compute_persona_direction.py --layer 4 --probe_position question_last_token --align_probe_index
 python persona_patching_runner.py --direction_path persona_direction.npy --layer 4 --alpha 3.0 --align_probe_index
 python autorater_stub.py --input_path patched_outputs.jsonl
-```
 python run_all.py --experiment patch --model_name gpt2 --pair_id physics
 ```
