@@ -18,7 +18,13 @@ from transformer_lens import HookedTransformer
 import numpy as np
 
 
-def run_probe_experiment(model_name: str, seed: int, save_path: str) -> None:
+def run_probe_experiment(
+    model_name: str,
+    seed: int,
+    save_path: str,
+    n_questions_per_pair: int,
+    template_holdout: bool,
+) -> None:
     """
     Runs the linear probe experiment and saves the results.
 
@@ -29,12 +35,16 @@ def run_probe_experiment(model_name: str, seed: int, save_path: str) -> None:
         seed: The random seed for reproducibility.
         save_path: The path to save the CSV file with the results.
     """
-    df = run_probe(model_name, seed)
+    df = run_probe(model_name, seed, n_questions_per_pair, template_holdout)
     df.to_csv(save_path, index=False)
     best_row = df.loc[df["accuracy"].idxmax()]
     print("\n--- Probe Experiment Results ---")
     print("Probe results saved to", save_path)
-    print(f"Best layer for persona representation: {int(best_row['layer'])} (Accuracy: {best_row['accuracy']:.4f})")
+    print(
+        "Best layer for persona representation:",
+        int(best_row["layer"]),
+        f"(Accuracy: {best_row['accuracy']:.4f}, AUC: {best_row['auc']:.4f})",
+    )
 
 
 def run_patch_experiment(model_name: str, pair_id: str, layer: int) -> None:
@@ -118,6 +128,17 @@ def main() -> None:
     # Arguments for the probe experiment
     parser.add_argument("--seed", type=int, default=42, help="Random seed for probe experiment.")
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save probe results.")
+    parser.add_argument(
+        "--n_questions_per_pair",
+        type=int,
+        default=5,
+        help="Number of questions sampled per persona pair.",
+    )
+    parser.add_argument(
+        "--template_holdout",
+        action="store_true",
+        help="Hold out one prompt template for testing.",
+    )
 
     # Arguments for the activation patching experiment
     parser.add_argument("--pair_id", type=str, default="physics", help="Persona pair ID for patching (e.g., 'physics').")
@@ -131,7 +152,13 @@ def main() -> None:
     print(f"Running experiment(s): '{args.experiment}' with model '{args.model_name}'")
 
     if args.experiment in ["probe", "all"]:
-        run_probe_experiment(args.model_name, args.seed, args.save_path)
+        run_probe_experiment(
+            args.model_name,
+            args.seed,
+            args.save_path,
+            args.n_questions_per_pair,
+            args.template_holdout,
+        )
 
     if args.experiment in ["patch", "all"]:
         # As a default, if running all experiments, let's use the best layer from the probe.

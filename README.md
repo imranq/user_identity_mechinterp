@@ -23,7 +23,7 @@ This folder starts a new experiment inspired by the IOI replication, but focused
 
 ## Quick Start
 1) Create a venv and install requirements in `SETUP.md`.
-2) Run `python run_all.py --experiment probe`.
+2) Run `python run_all.py --experiment probe --n_questions_per_pair 10 --template_holdout`.
 3) Use `python run_all.py --experiment patch --pair_id physics` to patch expert -> novice.
 
 Notes:

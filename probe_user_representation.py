@@ -13,7 +13,6 @@ The process is as follows:
 """
 
 import argparse
-from dataclasses import asdict
 from typing import List, Tuple
 
 import numpy as np
@@ -21,10 +20,10 @@ import pandas as pd
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from transformer_lens import HookedTransformer
 
-from persona_prompts import build_prompts, PERSONA_MARKER
+from persona_prompts import build_prompt_dataset, PERSONA_MARKER
 
 
 def find_subsequence(sequence: List[int], subsequence: List[int]) -> int:
@@ -98,7 +97,12 @@ def extract_layer_activations(
     return np.vstack(activations), np.array(labels)
 
 
-def run_probe(model_name: str, seed: int) -> pd.DataFrame:
+def run_probe(
+    model_name: str,
+    seed: int,
+    n_questions_per_pair: int,
+    template_holdout: bool,
+) -> pd.DataFrame:
     """
     Runs the linear probing experiment across all layers of a model.
 
@@ -112,25 +116,48 @@ def run_probe(model_name: str, seed: int) -> pd.DataFrame:
     torch.manual_seed(seed)
     np.random.seed(seed)
     model = HookedTransformer.from_pretrained(model_name, device="cpu")
-    prompt_objs = build_prompts()
+    prompt_objs = build_prompt_dataset(
+        n_questions_per_pair=n_questions_per_pair,
+        seed=seed,
+    )
     prompts = [(p.prompt, p.label) for p in prompt_objs]
+    template_ids = [p.template_id for p in prompt_objs]
+
+    if template_holdout:
+        unique_templates = sorted(set(template_ids))
+        test_template = unique_templates[-1]
+        train_indices = [i for i, t_id in enumerate(template_ids) if t_id != test_template]
+        test_indices = [i for i, t_id in enumerate(template_ids) if t_id == test_template]
+    else:
+        train_indices, test_indices = None, None
 
     results = []
     # Iterate through each layer of the model.
     for layer in range(model.cfg.n_layers):
         # Extract activations for the current layer.
         X, y = extract_layer_activations(model, prompts, layer)
-        # Split data into training and testing sets.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.25, random_state=seed, stratify=y
-        )
+        if template_holdout:
+            X_train = X[train_indices]
+            y_train = y[train_indices]
+            X_test = X[test_indices]
+            y_test = y[test_indices]
+        else:
+            # Split data into training and testing sets.
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.25, random_state=seed, stratify=y
+            )
         # Train a logistic regression classifier.
         clf = LogisticRegression(max_iter=1000, n_jobs=-1, random_state=seed)
         clf.fit(X_train, y_train)
         # Evaluate the classifier on the test set.
         y_pred = clf.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
-        results.append({"layer": layer, "accuracy": acc})
+        if len(set(y_test)) > 1:
+            y_prob = clf.predict_proba(X_test)[:, 1]
+            auc = roc_auc_score(y_test, y_prob)
+        else:
+            auc = float("nan")
+        results.append({"layer": layer, "accuracy": acc, "auc": auc})
 
     df = pd.DataFrame(results)
     return df
@@ -149,18 +176,41 @@ def main() -> None:
         help="The name of the model to use.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
+    parser.add_argument(
+        "--n_questions_per_pair",
+        type=int,
+        default=5,
+        help="Number of questions sampled per persona pair.",
+    )
+    parser.add_argument(
+        "--template_holdout",
+        action="store_true",
+        help="Hold out one prompt template for testing.",
+    )
     parser.add_argument("--save_path", type=str, default="probe_results.csv", help="Path to save the results CSV.")
     args = parser.parse_args()
 
     # Run the probing experiment.
-    df = run_probe(args.model_name, args.seed)
+    df = run_probe(
+        args.model_name,
+        args.seed,
+        args.n_questions_per_pair,
+        args.template_holdout,
+    )
     # Save the results to a CSV file.
     df.to_csv(args.save_path, index=False)
 
     # Find and print the layer with the highest accuracy.
     best_row = df.loc[df["accuracy"].idxmax()]
     print("Probe results saved to", args.save_path)
-    print("Best layer:", int(best_row["layer"]), "accuracy:", float(best_row["accuracy"]))
+    print(
+        "Best layer:",
+        int(best_row["layer"]),
+        "accuracy:",
+        float(best_row["accuracy"]),
+        "auc:",
+        float(best_row["auc"]),
+    )
 
 
 if __name__ == "__main__":
