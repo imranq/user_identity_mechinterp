@@ -81,6 +81,10 @@ def main() -> None:
     parser.add_argument("--out_path", type=str, default="persona_steer_outputs.jsonl")
     parser.add_argument("--plot_dir", type=str, default="report_artifacts")
     parser.add_argument("--drop_persona", action="store_true", help="Remove persona line from prompts.")
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--top_p", type=float, default=1.0)
+    parser.add_argument("--do_sample", action="store_true", help="Enable sampling for generation.")
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -99,12 +103,22 @@ def main() -> None:
     model = HookedTransformer.from_pretrained(args.model_name, device=device)
     direction = np.load(args.direction_path)
     direction_t = torch.tensor(direction, device=model.cfg.device, dtype=torch.float32)
+    torch.manual_seed(args.seed)
+
+    use_sampling = args.do_sample or args.temperature > 0.0 or args.top_p < 1.0
+    gen_kwargs = {
+        "max_new_tokens": args.max_new_tokens,
+        "do_sample": use_sampling,
+    }
+    if use_sampling:
+        gen_kwargs["temperature"] = args.temperature
+        gen_kwargs["top_p"] = args.top_p
 
     outputs: List[Dict[str, str]] = []
     for q in prompts:
         prompt = build_neutral_prompt(q, args.template_id, drop_persona=args.drop_persona)
         tokens = model.to_tokens(prompt)
-        clean_tokens = model.generate(tokens, max_new_tokens=args.max_new_tokens, do_sample=False)
+        clean_tokens = model.generate(tokens, **gen_kwargs)
         clean_text = model.to_string(clean_tokens[0])
 
         print("\n=== Question ===")
@@ -121,14 +135,11 @@ def main() -> None:
 
                 try:
                     with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
-                        steered_tokens = model.generate(
-                            tokens, max_new_tokens=args.max_new_tokens, do_sample=False
-                        )
+                        steered_tokens = model.generate(tokens, **gen_kwargs)
                 except TypeError:
                     steered_tokens = model.generate(
                         tokens,
-                        max_new_tokens=args.max_new_tokens,
-                        do_sample=False,
+                        **gen_kwargs,
                         hooks=[(hook_name, steer_hook)],
                     )
                 steered_text = model.to_string(steered_tokens[0])
