@@ -352,7 +352,7 @@ def main() -> None:
                     f.write("layer,steered_diff,baseline_diff\\n")
                     for layer in range(len(diffs)):
                         base_val = base_diffs[layer] if baseline_scores is not None else ""
-                        f.write(f\"{layer},{diffs[layer]},{base_val}\\n\")
+                        f.write(f"{layer},{diffs[layer]},{base_val}\n")
                 print("Saved diff curve:", curves_path)
 
 
