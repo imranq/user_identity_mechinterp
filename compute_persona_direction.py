@@ -18,15 +18,26 @@ def extract_activations(
     prompts: List[Tuple[str, int]],
     layer: int,
     probe_position: str,
+    batch_size: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     activations = []
     labels = []
-    for prompt, label in tqdm(prompts, desc="Extracting activations", unit="prompt"):
-        token_index = get_probe_token_index(model, prompt, probe_position)
-        _, cache = model.run_with_cache(prompt)
-        resid = cache["resid_pre", layer][0, token_index].detach().cpu().numpy()
-        activations.append(resid)
-        labels.append(label)
+    prompts_only = [p for p, _ in prompts]
+    token_indices = [
+        get_probe_token_index(model, prompt, probe_position) for prompt in prompts_only
+    ]
+    for start in tqdm(range(0, len(prompts_only), batch_size), desc="Extracting activations", unit="batch"):
+        end = min(start + batch_size, len(prompts_only))
+        batch_prompts = prompts_only[start:end]
+        batch_tokens = model.to_tokens(batch_prompts)
+        if batch_tokens.device != model.cfg.device:
+            batch_tokens = batch_tokens.to(model.cfg.device)
+        _, cache = model.run_with_cache(batch_tokens)
+        for offset, label in enumerate([label for _, label in prompts[start:end]]):
+            token_index = token_indices[start + offset]
+            resid = cache["resid_pre", layer][offset, token_index].detach().cpu().numpy()
+            activations.append(resid)
+            labels.append(label)
     return np.vstack(activations), np.array(labels)
 
 
@@ -67,6 +78,7 @@ def main() -> None:
     parser.add_argument("--persona_pad_token", type=str, default=" X")
     parser.add_argument("--save_path", type=str, default="persona_direction.npy")
     parser.add_argument("--meta_path", type=str, default="persona_direction.json")
+    parser.add_argument("--batch_size", type=int, default=32)
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -93,7 +105,7 @@ def main() -> None:
     prompts = [(p.prompt, p.label) for p in prompt_objs]
     print("Examples:", len(prompts))
 
-    X, y = extract_activations(model, prompts, args.layer, args.probe_position)
+    X, y = extract_activations(model, prompts, args.layer, args.probe_position, args.batch_size)
     if args.method == "mean":
         direction = mean_direction(X, y)
     else:
@@ -108,6 +120,7 @@ def main() -> None:
         "probe_position": args.probe_position,
         "method": args.method,
         "n_examples": len(prompts),
+        "batch_size": args.batch_size,
         "align_probe_index": args.align_probe_index,
         "probe_template_id": args.probe_template_id,
         "persona_pad_token": args.persona_pad_token,
