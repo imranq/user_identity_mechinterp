@@ -135,6 +135,45 @@ def logit_lens_scores_batch(
     return results
 
 
+def full_logits_per_layer(
+    model: HookedTransformer,
+    prompts: List[str],
+    steer_layer: int | None = None,
+    steer_alpha: float = 0.0,
+    steer_direction: np.ndarray | None = None,
+) -> List[List[np.ndarray]]:
+    """
+    Returns per-prompt, per-layer logits (vocab-sized) for the final token position.
+    """
+    lengths = [model.to_tokens(p)[0].shape[0] for p in prompts]
+    tokens = model.to_tokens(prompts)
+    hook_name = None
+    if steer_layer is not None and steer_direction is not None and steer_alpha != 0.0:
+        hook_name = f"blocks.{steer_layer}.hook_resid_pre"
+        direction_t = torch.tensor(steer_direction, device=model.cfg.device, dtype=torch.float32)
+
+        def steer_hook(activation, hook):
+            return activation + steer_alpha * direction_t
+
+        try:
+            with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
+                _, cache = model.run_with_cache(tokens)
+        except TypeError:
+            _, cache = model.run_with_cache(tokens, hooks=[(hook_name, steer_hook)])
+    else:
+        _, cache = model.run_with_cache(tokens)
+
+    per_prompt_logits: List[List[np.ndarray]] = []
+    for i, length in enumerate(lengths):
+        prompt_logits = []
+        for layer in range(model.cfg.n_layers):
+            resid = cache["resid_pre", layer][i, length - 1]
+            logits = model.unembed(resid).detach().cpu().numpy()
+            prompt_logits.append(logits)
+        per_prompt_logits.append(prompt_logits)
+    return per_prompt_logits
+
+
 def main() -> None:
     """
     Main function to run the logit lens experiment.
@@ -171,6 +210,7 @@ def main() -> None:
     parser.add_argument("--steer_layer", type=int, default=4)
     parser.add_argument("--steer_alpha", type=float, default=0.0)
     parser.add_argument("--debug_choices", action="store_true", help="Print choice token ids.")
+    parser.add_argument("--kl_plot", action="store_true", help="Plot KL divergence baseline vs steered.")
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -212,6 +252,15 @@ def main() -> None:
                 steer_alpha=0.0,
                 steer_direction=None,
             )
+            if args.kl_plot:
+                base_logits = full_logits_per_layer(model, batch_prompts)
+                steer_logits = full_logits_per_layer(
+                    model,
+                    batch_prompts,
+                    steer_layer=args.steer_layer,
+                    steer_alpha=args.steer_alpha,
+                    steer_direction=steer_direction,
+                )
         for idx, (pid, scores) in enumerate(zip(batch_ids, batch_scores)):
             diffs = np.array(scores[choices[0]]) - np.array(scores[choices[1]])
             pivot_layer = int(np.argmax(diffs))
@@ -254,6 +303,28 @@ def main() -> None:
                 fig.savefig(out_name)
                 plt.close(fig)
                 print("Saved plot:", out_name)
+                if args.kl_plot and args.steer_direction_path:
+                    base_logits_i = base_logits[idx]
+                    steer_logits_i = steer_logits[idx]
+                    kl_vals = []
+                    for layer in range(len(base_logits_i)):
+                        b = torch.tensor(base_logits_i[layer])
+                        s = torch.tensor(steer_logits_i[layer])
+                        b_probs = torch.softmax(b, dim=0)
+                        s_probs = torch.softmax(s, dim=0)
+                        kl = torch.sum(b_probs * (torch.log(b_probs + 1e-12) - torch.log(s_probs + 1e-12)))
+                        kl_vals.append(float(kl.item()))
+                    fig, ax = plt.subplots(figsize=(7, 3))
+                    ax.plot(kl_vals, label="KL(base || steered)")
+                    ax.set_xlabel("layer")
+                    ax.set_ylabel("KL")
+                    ax.set_title(f"{pid} | hinted={args.use_hint} | KL")
+                    ax.legend()
+                    fig.tight_layout()
+                    out_name = f"cot_kl_{pid}_hinted_{args.use_hint}.png"
+                    fig.savefig(out_name)
+                    plt.close(fig)
+                    print("Saved plot:", out_name)
 
 
 if __name__ == "__main__":
