@@ -100,6 +100,20 @@ def main() -> None:
         else:
             print("Not enough data for stats")
 
+    md_path = os.path.join(artifacts_dir, f"ab_summary_{config}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("| Prompt | Baseline A-B | Steered A-B | Delta | Flipped? |\n")
+        f.write("|---|---:|---:|---:|:---:|\n")
+        for prompt, baseline, steered, delta, flipped in rows:
+            f.write(
+                f"| {prompt} | {baseline:+.2f} | {steered:+.2f} | {delta:+.2f} | {'YES' if flipped else 'NO'} |\n"
+            )
+
+    print(f"Wrote: {md_path}")
+    print("\nMarkdown table:")
+    with open(md_path, "r", encoding="utf-8") as f:
+        print(f.read().strip())
+
     if args.no_plot:
         return
 
