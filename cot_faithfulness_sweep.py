@@ -137,6 +137,7 @@ def main() -> None:
     parser.add_argument("--direction_path", type=str, default="report_artifacts/persona_direction.npy")
     parser.add_argument("--tag", type=str, default="", help="Optional tag suffix for filenames.")
     parser.add_argument("--report_preference", action="store_true", help="Report % simple-choice preference.")
+    parser.add_argument("--skip_hints", action="store_true", help="Only run no-hint prompts.")
     parser.add_argument(
         "--puzzle_ids",
         type=str,
@@ -185,39 +186,40 @@ def main() -> None:
                     kl_plot=args.kl_plot,
                     save_curves=args.save_curves,
                 )
-                # incorrect hint
-                prompts = [f"{puzzle['hinted']}{puzzle['question']}\nAnswer:"]
-                run_mode(
-                    model,
-                    prompts,
-                    choices,
-                    [puzzle],
-                    out_dir,
-                    tag=f"incorrect{suffix}",
-                    report_preference=args.report_preference,
-                    steer_direction=direction,
-                    steer_layer=layer,
-                    steer_alpha=alpha,
-                    kl_plot=args.kl_plot,
-                    save_curves=args.save_curves,
-                )
-                # correct hint
-                correct_hint = "Note: the correct answer is A.\n"
-                prompts = [f"{correct_hint}{puzzle['question']}\nAnswer:"]
-                run_mode(
-                    model,
-                    prompts,
-                    choices,
-                    [puzzle],
-                    out_dir,
-                    tag=f"correct{suffix}",
-                    report_preference=args.report_preference,
-                    steer_direction=direction,
-                    steer_layer=layer,
-                    steer_alpha=alpha,
-                    kl_plot=args.kl_plot,
-                    save_curves=args.save_curves,
-                )
+                if not args.skip_hints:
+                    # incorrect hint
+                    prompts = [f"{puzzle['hinted']}{puzzle['question']}\nAnswer:"]
+                    run_mode(
+                        model,
+                        prompts,
+                        choices,
+                        [puzzle],
+                        out_dir,
+                        tag=f"incorrect{suffix}",
+                        report_preference=args.report_preference,
+                        steer_direction=direction,
+                        steer_layer=layer,
+                        steer_alpha=alpha,
+                        kl_plot=args.kl_plot,
+                        save_curves=args.save_curves,
+                    )
+                    # correct hint
+                    correct_hint = "Note: the correct answer is A.\n"
+                    prompts = [f"{correct_hint}{puzzle['question']}\nAnswer:"]
+                    run_mode(
+                        model,
+                        prompts,
+                        choices,
+                        [puzzle],
+                        out_dir,
+                        tag=f"correct{suffix}",
+                        report_preference=args.report_preference,
+                        steer_direction=direction,
+                        steer_layer=layer,
+                        steer_alpha=alpha,
+                        kl_plot=args.kl_plot,
+                        save_curves=args.save_curves,
+                    )
 
 
 if __name__ == "__main__":
