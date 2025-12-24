@@ -8,7 +8,7 @@ from pathlib import Path
 
 SYSTEM_PROMPT = (
     "You are grading whether outputs become more expert as alpha increases. "
-    "Return exactly two lines: first line YES or NO, second line a one-sentence rationale."
+    "Return exactly two lines: first line YES or NO, second line a rationale (max 500 words)."
 )
 
 

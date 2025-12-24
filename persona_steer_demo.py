@@ -162,6 +162,8 @@ def main() -> None:
         gen_kwargs["top_p"] = args.top_p
 
     outputs: List[Dict[str, str]] = []
+    out_path = Path(args.out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     for q in prompts:
         prompt = build_neutral_prompt(q, args.template_id, drop_persona=args.drop_persona)
         tokens = model.to_tokens(prompt)
@@ -190,16 +192,17 @@ def main() -> None:
                         hooks=[(hook_name, steer_hook)],
                     )
                 steered_text = model.to_string(steered_tokens[0])
-                outputs.append(
-                    {
-                        "question": q,
-                        "prompt": prompt,
-                        "clean_output": clean_text,
-                        "steered_output": steered_text,
-                        "alpha": alpha,
-                        "layer": layer,
-                    }
-                )
+                record = {
+                    "question": q,
+                    "prompt": prompt,
+                    "clean_output": clean_text,
+                    "steered_output": steered_text,
+                    "alpha": alpha,
+                    "layer": layer,
+                }
+                outputs.append(record)
+                with out_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(record) + "\n")
                 print(f"\n--- Steered (layer={layer}, alpha={alpha}) ---")
                 print(steered_text)
 
@@ -243,8 +246,7 @@ def main() -> None:
                 plt.close(fig)
                 print("Saved plot:", out_path)
 
-    Path(args.out_path).write_text("\n".join(json.dumps(o) for o in outputs))
-    print("\nWrote:", args.out_path)
+    print("\nWrote:", out_path)
 
 
 if __name__ == "__main__":

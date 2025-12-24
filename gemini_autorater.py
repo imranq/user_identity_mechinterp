@@ -67,6 +67,7 @@ def main() -> None:
             )
             label = (resp.text or "").strip().split()[0] if resp else ""
             writer.writerow({"id": row.get("id", ""), "label": label})
+            f.flush()
             if args.sleep:
                 time.sleep(args.sleep)
 
