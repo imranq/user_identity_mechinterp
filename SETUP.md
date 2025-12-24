@@ -9,11 +9,11 @@ pip install -r requirements.txt
 ```
 
 ## Model notes
-- Default model is `google/gemma-3-4b-it` and may require Hugging Face access.
-- For quick smoke tests, use `gpt2` with `--model_name gpt2`.
+- Default model for the experiments is `google/gemma-2-2b-it`.
+- You will need Hugging Face access for Gemma.
 
-## RunPod setup (Gemma 3 4B-IT)
-This follows the same flow as `ioi_replication/RUNPOD_INSTRUCTIONS.md`, adjusted for this experiment.
+## RunPod setup (Gemma-2-2B-IT)
+This uses a single RTX 4090 and the PyTorch 2.1.0 image.
 
 ### Prerequisites
 - RunPod account with an API key.
@@ -21,7 +21,7 @@ This follows the same flow as `ioi_replication/RUNPOD_INSTRUCTIONS.md`, adjusted
 - `runpodctl` installed and available in `PATH`.
 
 ### Create a pod
-Use a GPU with at least 24GB VRAM (1x L40S or 1x A100 40GB) and a PyTorch template.
+Use a GPU with at least 24GB VRAM (1x RTX 4090 works) and a PyTorch template.
 
 ```bash
 chmod +x mats/user_identity_mechinterp/runpod_user_identity.sh
@@ -65,14 +65,33 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
-pip install transformer_lens nnsight jaxtyping einops
 huggingface-cli login --token "$HF_TOKEN"
 ```
 
-### Run experiments
+### Run experiments (core)
 ```bash
-python run_all.py --experiment probe --model_name google/gemma-3-4b-it
-python run_all.py --experiment patch --model_name google/gemma-3-4b-it --pair_id physics
+python run_all.py --experiment probe --model_name google/gemma-2-2b-it \
+  --n_questions_per_pair 10 --template_holdout --max_layers 12 --min_layer 1 \
+  --device cuda --probe_position question_last_token --align_probe_index --batch_size 32
+
+python compute_persona_direction.py --layer 4 --probe_position question_last_token \
+  --align_probe_index --method mean --batch_size 32 \
+  --save_path report_artifacts/persona_direction.npy \
+  --meta_path report_artifacts/persona_direction.json
+
+python persona_steer_demo.py --direction_path report_artifacts/persona_direction.npy \
+  --layers "16,18,20" --alphas "8.0,12.0,16.0" \
+  --max_new_tokens 500 --plot_dir report_artifacts --do_sample --temperature 0.7 --top_p 0.9 \
+  --prompts_path steer_prompts.txt --out_path report_artifacts/persona_steer_outputs.jsonl
+
+python cot_faithfulness_sweep.py --model_name google/gemma-2-2b-it --device cuda \
+  --direction_path report_artifacts/persona_direction.npy \
+  --layers "22,24" --alphas "32,64" \
+  --report_preference --kl_plot --save_curves --skip_hints --grid_plot \
+  --out_dir report_artifacts --tag grid_ab \
+  --puzzle_ids "rainbows,twin_paradox,photosynthesis,dna_replication,plate_tectonics,entropy,transistor,antibodies"
+
+python ab_summary.py --config nohint_L24_a64p0_grid_ab
 ```
 
 ### Tear down
@@ -94,48 +113,5 @@ Or cache HTTPS credentials for 24 hours:
 git config --global credential.helper 'cache --timeout=86400'
 ```
 
-## Research brief: Persona-Reasoning Bottleneck (Gemma 3)
-**Question:** When Gemma 3 is prompted with a specific persona (e.g., "5-year-old" vs "PhD"), does it decide on answer complexity/correctness before it starts its Chain-of-Thought?
-
-**Hypothesis:** There is a mid-layer persona direction in the residual stream. Patching this direction from "PhD" into "Child" preserves tone but shifts internal reasoning.
-
-### Experiment A: Logit Lens (Decision point)
-- Prompt pair: "You are a PhD in Physics. Explain the twin paradox using Chain-of-Thought." vs "You are a 5-year-old..."
-- Run logit lens on the last prompt token (before generation).
-- Look for early-layer shifts (e.g., "Lorentz"/"Relativity" vs "Space"/"Fast").
-
-### Experiment B: Activation/Path Patching (Persona circuit)
-- Patch mid-layer activations from "PhD" into "Child".
-- Metric: logit diff between a simple token (e.g., "fast") and a complex token (e.g., "dilation").
-- Identify "persona mover" heads that cause expert concepts to appear.
-
-### 20-hour workflow
-1) Setup and verify Gemma 3 in TransformerLens.
-2) Linear probe for persona classification on residual stream.
-3) Patching to find 3-5 causal heads.
-4) Ablate those heads and measure persona coherence.
-
-### Report structure
-1) Objective (one sentence).
-2) Model & dataset (Gemma 3 4B-IT + persona prompts).
-3) Key results (include logit diff plot).
-4) Evidence of circuitry (head indices and hypothesized roles).
-5) Failures & negative results (explicitly documented).
-
-### Executive summary tips
-- 200-300 words, lead with the hook and concrete circuit results.
-- Use "unfaithful reasoning" or "circuit failure" instead of "hallucination."
-
-## Quick runs
-```bash
-python run_all.py --experiment probe --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12
-python run_all.py --experiment all --model_name gpt2 --n_questions_per_pair 10 --template_holdout --max_layers 12 --reuse_model
-```
-
-## Persona direction + patching workflow
-```bash
-python compute_persona_direction.py --layer 4 --probe_position question_last_token --align_probe_index
-python persona_patching_runner.py --direction_path persona_direction.npy --layer 4 --alpha 3.0 --align_probe_index
-python autorater_stub.py --input_path patched_outputs.jsonl
-python run_all.py --experiment patch --model_name gpt2 --pair_id physics
-```
+## Git auth on the pod (avoid password prompts)
+Use SSH (recommended):\n```bash\nssh-keygen -t ed25519 -C \"runpod\"\ncat ~/.ssh/id_ed25519.pub\n# add the key to GitHub, then:\ngit remote set-url origin git@github.com:imranq/user_identity_mechinterp.git\n```\n+\n+Or cache HTTPS credentials for 24 hours:\n```bash\ngit config --global credential.helper 'cache --timeout=86400'\n```\n*** End Patch"}}
