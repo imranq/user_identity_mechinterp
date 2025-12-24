@@ -218,6 +218,7 @@ def main() -> None:
     parser.add_argument("--debug_choices", action="store_true", help="Print choice token ids.")
     parser.add_argument("--kl_plot", action="store_true", help="Plot KL divergence baseline vs steered.")
     parser.add_argument("--out_dir", type=str, default=".", help="Directory to save plots.")
+    parser.add_argument("--tag", type=str, default="", help="Optional tag appended to output filenames.")
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -309,7 +310,8 @@ def main() -> None:
                 ax.legend()
                 fig.tight_layout()
                 suffix = "_steered" if args.steer_direction_path else ""
-                out_name = Path(args.out_dir) / f"cot_lens_{pid}_hinted_{args.use_hint}{suffix}.png"
+                tag = f"_{args.tag}" if args.tag else ""
+                out_name = Path(args.out_dir) / f"cot_lens_{pid}_hinted_{args.use_hint}{suffix}{tag}.png"
                 fig.savefig(out_name)
                 plt.close(fig)
                 print("Saved plot:", out_name)
@@ -331,7 +333,7 @@ def main() -> None:
                     ax.set_title(f"{pid} | hinted={args.use_hint} | KL")
                     ax.legend()
                     fig.tight_layout()
-                    out_name = Path(args.out_dir) / f"cot_kl_{pid}_hinted_{args.use_hint}.png"
+                    out_name = Path(args.out_dir) / f"cot_kl_{pid}_hinted_{args.use_hint}{tag}.png"
                     fig.savefig(out_name)
                     plt.close(fig)
                     print("Saved plot:", out_name)
