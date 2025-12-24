@@ -34,6 +34,8 @@ def main() -> None:
     parser.add_argument("--model", type=str, default="gemini-flash-lite-latest")
     parser.add_argument("--sleep", type=float, default=0.0, help="Sleep seconds between calls.")
     parser.add_argument("--prompt_field", type=str, default="prompt", help="CSV field to use as full prompt.")
+    parser.add_argument("--echo_prompt", action="store_true", help="Print each prompt before sending.")
+    parser.add_argument("--max_prompt_chars", type=int, default=800, help="Truncate prompt when echoing.")
     args = parser.parse_args()
 
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -54,6 +56,10 @@ def main() -> None:
         writer.writeheader()
         for row in rows:
             prompt = build_prompt(row, args.prompt_field)
+            if args.echo_prompt:
+                preview = prompt[: args.max_prompt_chars]
+                print("\n--- AUTORATER PROMPT (truncated) ---")
+                print(preview)
             contents = [
                 types.Content(
                     role="user",
