@@ -350,6 +350,10 @@ def main() -> None:
                     base = baseline_scores[idx]
                     base_diffs = np.array(base[choices[0]]) - np.array(base[choices[1]])
                     ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
+                ax.axhline(0.0, color="gray", linewidth=0.8, linestyle=":")
+                ax.scatter([len(diffs) - 1], [diffs[-1]], s=24, color="tab:blue", zorder=3)
+                if baseline_scores is not None:
+                    ax.scatter([len(base_diffs) - 1], [base_diffs[-1]], s=24, color="tab:orange", zorder=3)
                 ax.axvline(pivot_layer, color="tab:orange", linestyle="--", label="pivot")
                 ax.axvline(jump_layer, color="tab:green", linestyle="--", label="max jump")
                 if stable_layer is not None:
