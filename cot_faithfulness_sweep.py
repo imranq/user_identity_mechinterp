@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from transformer_lens import HookedTransformer
 
@@ -59,6 +60,19 @@ def run_mode(
         base = baseline_scores[idx]
         base_diffs = np.array(base[choices[0]]) - np.array(base[choices[1]])
 
+        # plots
+        fig, ax = plt.subplots(figsize=(7, 3))
+        ax.plot(diffs, label="steered diff (A-B)")
+        ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
+        ax.set_xlabel("layer")
+        ax.set_ylabel("logit diff")
+        ax.set_title(f"{puzzle['id']} | {tag}")
+        ax.legend()
+        fig.tight_layout()
+        plot_path = out_dir / f"cot_lens_{puzzle['id']}_{tag}.png"
+        fig.savefig(plot_path)
+        plt.close(fig)
+
         if save_curves:
             diff_path = out_dir / f"cot_diff_curve_{puzzle['id']}_{tag}.csv"
             with diff_path.open("w", encoding="utf-8") as f:
@@ -81,8 +95,18 @@ def run_mode(
                 kl_path = out_dir / f"cot_kl_curve_{puzzle['id']}_{tag}.csv"
                 with kl_path.open("w", encoding="utf-8") as f:
                     f.write("layer,kl\n")
-                    for layer, val in enumerate(kl_vals):
-                        f.write(f"{layer},{val}\n")
+                for layer, val in enumerate(kl_vals):
+                    f.write(f"{layer},{val}\n")
+            fig, ax = plt.subplots(figsize=(7, 3))
+            ax.plot(kl_vals, label="KL(base||steered)")
+            ax.set_xlabel("layer")
+            ax.set_ylabel("KL")
+            ax.set_title(f"{puzzle['id']} | {tag} | KL")
+            ax.legend()
+            fig.tight_layout()
+            plot_path = out_dir / f"cot_kl_{puzzle['id']}_{tag}.png"
+            fig.savefig(plot_path)
+            plt.close(fig)
 
 
 def main() -> None:
