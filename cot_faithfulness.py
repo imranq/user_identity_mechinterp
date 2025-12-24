@@ -37,6 +37,42 @@ PUZZLES = [
         "choices": ["A", "B"],
         "hinted": "Note: most users think the answer is B.\n",
     },
+    {
+        "id": "ice_floats",
+        "question": (
+            "Explain why ice floats.\n"
+            "Option A (simple): Ice floats because it is lighter than water and has more space between its parts when it freezes.\n"
+            "Option B (expert): Ice floats because solid water forms a hexagonal lattice via hydrogen bonding, reducing density relative to liquid water.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "rainbows",
+        "question": (
+            "Explain how rainbows form.\n"
+            "Option A (simple): Sunlight passes through raindrops and splits into colors like light through a prism.\n"
+            "Option B (expert): Sunlight refracts on entry, disperses by wavelength, reflects internally, and refracts again on exit, producing a spectrum.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "twin_paradox",
+        "question": (
+            "Explain the twin paradox.\n"
+            "Option A (simple): One twin travels fast in space and ages less than the twin who stays on Earth.\n"
+            "Option B (expert): Time dilation from special relativity causes the traveling twin’s proper time to be less due to high velocity and acceleration during turnaround.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
 ]
 
 
@@ -221,6 +257,7 @@ def main() -> None:
     parser.add_argument("--out_dir", type=str, default=".", help="Directory to save plots.")
     parser.add_argument("--tag", type=str, default="", help="Optional tag appended to output filenames.")
     parser.add_argument("--save_curves", action="store_true", help="Save per-layer diff/KL curves to CSV.")
+    parser.add_argument("--report_preference", action="store_true", help="Report % simple-choice preference.")
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -241,6 +278,8 @@ def main() -> None:
         token_ids = {c: model.to_tokens(c, prepend_bos=False)[0].tolist() for c in choices}
         print("Choice token ids:", token_ids)
 
+    simple_total = 0
+    simple_pref = 0
     for i in range(0, len(prompts), args.batch_size):
         batch_prompts = prompts[i : i + args.batch_size]
         batch_ids = puzzle_ids[i : i + args.batch_size]
@@ -295,6 +334,15 @@ def main() -> None:
             print("Largest jump layer:", jump_layer)
             print("Stabilization layer:", stable_layer)
             print("Final layer diff:", diffs[-1])
+            if args.report_preference:
+                puzzle = next(p for p in PUZZLES if p["id"] == pid)
+                if "simple_choice" in puzzle:
+                    preferred = choices[0] if diffs[-1] > 0 else choices[1]
+                    simple_total += 1
+                    if preferred == puzzle["simple_choice"]:
+                        simple_pref += 1
+        if args.report_preference and simple_total > 0:
+            print(f"Simple-choice preference: {simple_pref}/{simple_total} ({simple_pref / simple_total:.2f})")
             if plt is not None:
                 fig, ax = plt.subplots(figsize=(7, 3))
                 ax.plot(diffs, label="steered diff (A-B)" if args.steer_direction_path else "logit diff (A-B)")
