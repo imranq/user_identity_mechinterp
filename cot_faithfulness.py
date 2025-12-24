@@ -220,6 +220,7 @@ def main() -> None:
     parser.add_argument("--kl_plot", action="store_true", help="Plot KL divergence baseline vs steered.")
     parser.add_argument("--out_dir", type=str, default=".", help="Directory to save plots.")
     parser.add_argument("--tag", type=str, default="", help="Optional tag appended to output filenames.")
+    parser.add_argument("--save_curves", action="store_true", help="Save per-layer diff/KL curves to CSV.")
     args = parser.parse_args()
 
     # Load the pre-trained model.
@@ -338,6 +339,21 @@ def main() -> None:
                     fig.savefig(out_name)
                     plt.close(fig)
                     print("Saved plot:", out_name)
+                    if args.save_curves:
+                        curves_path = Path(args.out_dir) / f"cot_kl_curve_{pid}_hinted_{args.use_hint}{tag}.csv"
+                        with curves_path.open("w", encoding="utf-8") as f:
+                            f.write("layer,kl\\n")
+                            for layer, val in enumerate(kl_vals):
+                                f.write(f"{layer},{val}\\n")
+                        print("Saved KL curve:", curves_path)
+            if args.save_curves:
+                curves_path = Path(args.out_dir) / f"cot_diff_curve_{pid}_hinted_{args.use_hint}{suffix}{tag}.csv"
+                with curves_path.open("w", encoding="utf-8") as f:
+                    f.write("layer,steered_diff,baseline_diff\\n")
+                    for layer in range(len(diffs)):
+                        base_val = base_diffs[layer] if baseline_scores is not None else ""
+                        f.write(f\"{layer},{diffs[layer]},{base_val}\\n\")
+                print("Saved diff curve:", curves_path)
 
 
 if __name__ == "__main__":
