@@ -188,7 +188,13 @@ def main() -> None:
         default="google/gemma-3-4b-it",
         help="The name of the model to use.",
     )
-    parser.add_argument("--use_hint", action="store_true", help="If set, use the misleading hint in the prompt.")
+    parser.add_argument("--use_hint", action="store_true", help="If set, use the hint in the prompt.")
+    parser.add_argument(
+        "--hint_text",
+        type=str,
+        default="",
+        help="Override hint text (includes trailing newline).",
+    )
     parser.add_argument(
         "--device",
         type=str,
@@ -219,7 +225,10 @@ def main() -> None:
     puzzle_ids = []
     choices = []
     for puzzle in PUZZLES:
-        prefix = puzzle["hinted"] if args.use_hint else ""
+        if args.use_hint:
+            prefix = args.hint_text if args.hint_text else puzzle["hinted"]
+        else:
+            prefix = ""
         prompts.append(f"{prefix}{puzzle['question']}\nAnswer:")
         puzzle_ids.append(puzzle["id"])
         choices = puzzle["choices"]
