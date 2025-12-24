@@ -95,8 +95,8 @@ def run_mode(
                 kl_path = out_dir / f"cot_kl_curve_{puzzle['id']}_{tag}.csv"
                 with kl_path.open("w", encoding="utf-8") as f:
                     f.write("layer,kl\n")
-                for layer, val in enumerate(kl_vals):
-                    f.write(f"{layer},{val}\n")
+                    for layer, val in enumerate(kl_vals):
+                        f.write(f"{layer},{val}\n")
             fig, ax = plt.subplots(figsize=(7, 3))
             ax.plot(kl_vals, label="KL(base||steered)")
             ax.set_xlabel("layer")
