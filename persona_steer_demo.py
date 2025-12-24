@@ -68,6 +68,44 @@ def projection_scores(
     return scores
 
 
+def kl_scores(
+    model: HookedTransformer,
+    prompts: List[str],
+    direction: np.ndarray,
+    layer: int,
+    alpha: float,
+) -> float:
+    lengths = [model.to_tokens(p)[0].shape[0] for p in prompts]
+    tokens = model.to_tokens(prompts)
+    hook_name = f"blocks.{layer}.hook_resid_pre"
+    direction_t = torch.tensor(direction, device=model.cfg.device, dtype=torch.float32)
+
+    def steer_hook(activation, hook):
+        return activation + alpha * direction_t
+
+    _, base_cache = model.run_with_cache(tokens)
+    if alpha != 0.0:
+        try:
+            with model.hooks(fwd_hooks=[(hook_name, steer_hook)]):
+                _, steer_cache = model.run_with_cache(tokens)
+        except TypeError:
+            _, steer_cache = model.run_with_cache(tokens, hooks=[(hook_name, steer_hook)])
+    else:
+        steer_cache = base_cache
+
+    kls = []
+    for i, length in enumerate(lengths):
+        base_resid = base_cache["resid_pre", layer][i, length - 1]
+        steer_resid = steer_cache["resid_pre", layer][i, length - 1]
+        base_logits = model.unembed(base_resid)
+        steer_logits = model.unembed(steer_resid)
+        base_probs = torch.softmax(base_logits, dim=0)
+        steer_probs = torch.softmax(steer_logits, dim=0)
+        kl = torch.sum(base_probs * (torch.log(base_probs + 1e-12) - torch.log(steer_probs + 1e-12)))
+        kls.append(float(kl.item()))
+    return float(np.mean(kls))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Persona steering demo.")
     parser.add_argument("--model_name", type=str, default="google/gemma-2-2b-it")
@@ -85,6 +123,10 @@ def main() -> None:
     parser.add_argument("--top_p", type=float, default=1.0)
     parser.add_argument("--do_sample", action="store_true", help="Enable sampling for generation.")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--random_direction", action="store_true", help="Use a random direction baseline.")
+    parser.add_argument("--random_seed", type=int, default=0)
+    parser.add_argument("--kl_report", action="store_true", help="Compute KL(base||steered) per layer/alpha.")
+    parser.add_argument("--kl_out", type=str, default="report_artifacts/steer_kl.csv")
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -102,6 +144,11 @@ def main() -> None:
 
     model = HookedTransformer.from_pretrained(args.model_name, device=device)
     direction = np.load(args.direction_path)
+    if args.random_direction:
+        rng = np.random.default_rng(args.random_seed)
+        random_dir = rng.standard_normal(direction.shape)
+        random_dir = random_dir / (np.linalg.norm(random_dir) + 1e-8)
+        direction = random_dir * (np.linalg.norm(direction) + 1e-8)
     direction_t = torch.tensor(direction, device=model.cfg.device, dtype=torch.float32)
     torch.manual_seed(args.seed)
 
@@ -155,6 +202,21 @@ def main() -> None:
                 )
                 print(f"\n--- Steered (layer={layer}, alpha={alpha}) ---")
                 print(steered_text)
+
+    if args.kl_report:
+        plot_dir = Path(args.plot_dir)
+        plot_dir.mkdir(parents=True, exist_ok=True)
+        prompt_texts = [
+            build_neutral_prompt(q, args.template_id, drop_persona=args.drop_persona)
+            for q in prompts
+        ]
+        rows = ["layer,alpha,kl_base_steered"]
+        for layer in layers:
+            for alpha in alphas:
+                kl_val = kl_scores(model, prompt_texts, direction, layer, alpha)
+                rows.append(f"{layer},{alpha},{kl_val}")
+        Path(args.kl_out).write_text("\n".join(rows))
+        print("Saved KL summary:", args.kl_out)
 
     if plt is not None:
         plot_dir = Path(args.plot_dir)
