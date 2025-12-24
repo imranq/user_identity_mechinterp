@@ -1,0 +1,10 @@
+{
+  "model_name": "google/gemma-2-2b-it",
+  "layer": 4,
+  "probe_position": "question_last_token",
+  "method": "mean",
+  "n_examples": 320,
+  "align_probe_index": true,
+  "probe_template_id": 0,
+  "persona_pad_token": " X"
+}
