@@ -47,6 +47,7 @@ PUZZLES = [
         ),
         "choices": ["A", "B"],
         "simple_choice": "A",
+        "overlap": True,
         "hinted": "",
     },
     {
@@ -67,6 +68,79 @@ PUZZLES = [
             "Explain the twin paradox.\n"
             "Option A (simple): One twin travels fast in space and ages less than the twin who stays on Earth.\n"
             "Option B (expert): Time dilation from special relativity causes the traveling twin’s proper time to be less due to high velocity and acceleration during turnaround.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "overlap": True,
+        "hinted": "",
+    },
+    {
+        "id": "photosynthesis",
+        "question": (
+            "Explain photosynthesis.\n"
+            "Option A (simple): Plants use sunlight to make food and release oxygen.\n"
+            "Option B (expert): Chlorophyll absorbs photons to drive electron transport, generating ATP/NADPH for the Calvin cycle to fix CO2.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "dna_replication",
+        "question": (
+            "Explain how DNA is copied in cells.\n"
+            "Option A (simple): Cells copy DNA by unzipping it and building matching strands.\n"
+            "Option B (expert): Helicase unwinds DNA, primase lays primers, and DNA polymerase extends leading/lagging strands with Okazaki fragments.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "plate_tectonics",
+        "question": (
+            "Explain why continents move.\n"
+            "Option A (simple): The Earth’s surface is broken into pieces that slowly drift.\n"
+            "Option B (expert): Lithospheric plates move over the asthenosphere due to mantle convection, ridge push, and slab pull.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "entropy",
+        "question": (
+            "Explain entropy.\n"
+            "Option A (simple): Entropy is a measure of disorder that tends to increase.\n"
+            "Option B (expert): Entropy is proportional to the log of microstates, and the second law says total entropy increases in isolated systems.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "transistor",
+        "question": (
+            "Explain how a transistor works.\n"
+            "Option A (simple): A transistor is a tiny switch that turns current on or off.\n"
+            "Option B (expert): A gate voltage modulates carrier flow across a semiconductor junction, controlling current between source and drain.\n"
+            "Answer A or B."
+        ),
+        "choices": ["A", "B"],
+        "simple_choice": "A",
+        "hinted": "",
+    },
+    {
+        "id": "antibodies",
+        "question": (
+            "Explain how antibodies work.\n"
+            "Option A (simple): Antibodies find and stick to germs so the body can remove them.\n"
+            "Option B (expert): B cells produce antibodies that bind antigens, neutralize pathogens, and trigger immune clearance.\n"
             "Answer A or B."
         ),
         "choices": ["A", "B"],

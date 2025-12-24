@@ -23,6 +23,7 @@ def run_mode(
     out_dir: Path,
     tag: str,
     report_preference: bool,
+    grid_plot: bool,
     steer_direction: np.ndarray | None,
     steer_layer: int | None,
     steer_alpha: float,
@@ -69,21 +70,21 @@ def run_mode(
             if preferred == puzzle["simple_choice"]:
                 simple_pref += 1
 
-        # plots
-        fig, ax = plt.subplots(figsize=(7, 3))
-        ax.plot(diffs, label="steered diff (A-B)")
-        ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
-        ax.axhline(0.0, color="gray", linewidth=0.8, linestyle=":")
-        ax.scatter([len(diffs) - 1], [diffs[-1]], s=24, color="tab:blue", zorder=3)
-        ax.scatter([len(base_diffs) - 1], [base_diffs[-1]], s=24, color="tab:orange", zorder=3)
-        ax.set_xlabel("layer")
-        ax.set_ylabel("logit diff")
-        ax.set_title(f"{puzzle['id']} | {tag}")
-        ax.legend()
-        fig.tight_layout()
-        plot_path = out_dir / f"cot_lens_{puzzle['id']}_{tag}.png"
-        fig.savefig(plot_path)
-        plt.close(fig)
+        if not grid_plot:
+            fig, ax = plt.subplots(figsize=(7, 3))
+            ax.plot(diffs, label="steered diff (A-B)")
+            ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
+            ax.axhline(0.0, color="gray", linewidth=0.8, linestyle=":")
+            ax.scatter([len(diffs) - 1], [diffs[-1]], s=24, color="tab:blue", zorder=3)
+            ax.scatter([len(base_diffs) - 1], [base_diffs[-1]], s=24, color="tab:orange", zorder=3)
+            ax.set_xlabel("layer")
+            ax.set_ylabel("logit diff")
+            ax.set_title(f"{puzzle['id']} | {tag}")
+            ax.legend()
+            fig.tight_layout()
+            plot_path = out_dir / f"cot_lens_{puzzle['id']}_{tag}.png"
+            fig.savefig(plot_path)
+            plt.close(fig)
 
         if save_curves:
             diff_path = out_dir / f"cot_diff_curve_{puzzle['id']}_{tag}.csv"
@@ -119,6 +120,34 @@ def run_mode(
             plot_path = out_dir / f"cot_kl_{puzzle['id']}_{tag}.png"
             fig.savefig(plot_path)
             plt.close(fig)
+    if grid_plot and puzzles:
+        cols = 2
+        rows = int(np.ceil(len(puzzles) / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(7 * cols, 3 * rows))
+        axes = np.array(axes).reshape(-1)
+        for idx, (puzzle, sc) in enumerate(zip(puzzles, scores)):
+            diffs = np.array(sc[choices[0]]) - np.array(sc[choices[1]])
+            base = baseline_scores[idx]
+            base_diffs = np.array(base[choices[0]]) - np.array(base[choices[1]])
+            ax = axes[idx]
+            ax.plot(diffs, label="steered diff (A-B)")
+            ax.plot(base_diffs, label="baseline diff (A-B)", linestyle="--")
+            ax.axhline(0.0, color="gray", linewidth=0.8, linestyle=":")
+            ax.scatter([len(diffs) - 1], [diffs[-1]], s=24, color="tab:blue", zorder=3)
+            ax.scatter([len(base_diffs) - 1], [base_diffs[-1]], s=24, color="tab:orange", zorder=3)
+            ax.set_title(puzzle["id"])
+            ax.set_xlabel("layer")
+            ax.set_ylabel("logit diff")
+        for ax in axes[len(puzzles):]:
+            ax.axis("off")
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="upper right")
+        fig.suptitle(tag)
+        fig.tight_layout()
+        plot_path = out_dir / f"cot_lens_grid_{tag}.png"
+        fig.savefig(plot_path)
+        plt.close(fig)
+
     if report_preference and simple_total:
         frac = simple_pref / simple_total
         print(f"[{tag}] Simple-choice preference: {simple_pref}/{simple_total} ({frac:.2f})")
@@ -138,6 +167,7 @@ def main() -> None:
     parser.add_argument("--tag", type=str, default="", help="Optional tag suffix for filenames.")
     parser.add_argument("--report_preference", action="store_true", help="Report % simple-choice preference.")
     parser.add_argument("--skip_hints", action="store_true", help="Only run no-hint prompts.")
+    parser.add_argument("--grid_plot", action="store_true", help="Save a grid plot per config instead of per puzzle.")
     parser.add_argument(
         "--puzzle_ids",
         type=str,
@@ -162,64 +192,68 @@ def main() -> None:
     if args.puzzle_ids:
         wanted = {p.strip() for p in args.puzzle_ids.split(",") if p.strip()}
         puzzles = [p for p in PUZZLES if p["id"] in wanted]
-    for puzzle in puzzles:
-        choices = puzzle["choices"]
-        for layer in layers:
-            for alpha in alphas:
-                alpha_tag = str(alpha).replace(".", "p")
-                suffix = f"_L{layer}_a{alpha_tag}"
-                if args.tag:
-                    suffix = f"{suffix}_{args.tag}"
-                # no hint
-                prompts = [f"{puzzle['question']}\nAnswer:"]
+    if not puzzles:
+        return
+    choices = puzzles[0]["choices"]
+    for layer in layers:
+        for alpha in alphas:
+            alpha_tag = str(alpha).replace(".", "p")
+            suffix = f"_L{layer}_a{alpha_tag}"
+            if args.tag:
+                suffix = f"{suffix}_{args.tag}"
+            prompts = [f"{puzzle['question']}\nAnswer:" for puzzle in puzzles]
+            run_mode(
+                model,
+                prompts,
+                choices,
+                puzzles,
+                out_dir,
+                tag=f"nohint{suffix}",
+                report_preference=args.report_preference,
+                grid_plot=args.grid_plot,
+                steer_direction=direction,
+                steer_layer=layer,
+                steer_alpha=alpha,
+                kl_plot=args.kl_plot,
+                save_curves=args.save_curves,
+            )
+            if not args.skip_hints:
+                prompts = [
+                    f"{(puzzle['hinted'] or '')}{puzzle['question']}\nAnswer:"
+                    for puzzle in puzzles
+                ]
                 run_mode(
                     model,
                     prompts,
                     choices,
-                    [puzzle],
+                    puzzles,
                     out_dir,
-                    tag=f"nohint{suffix}",
+                    tag=f"incorrect{suffix}",
                     report_preference=args.report_preference,
+                    grid_plot=args.grid_plot,
                     steer_direction=direction,
                     steer_layer=layer,
                     steer_alpha=alpha,
                     kl_plot=args.kl_plot,
                     save_curves=args.save_curves,
                 )
-                if not args.skip_hints:
-                    # incorrect hint
-                    prompts = [f"{puzzle['hinted']}{puzzle['question']}\nAnswer:"]
-                    run_mode(
-                        model,
-                        prompts,
-                        choices,
-                        [puzzle],
-                        out_dir,
-                        tag=f"incorrect{suffix}",
-                        report_preference=args.report_preference,
-                        steer_direction=direction,
-                        steer_layer=layer,
-                        steer_alpha=alpha,
-                        kl_plot=args.kl_plot,
-                        save_curves=args.save_curves,
-                    )
-                    # correct hint
-                    correct_hint = "Note: the correct answer is A.\n"
-                    prompts = [f"{correct_hint}{puzzle['question']}\nAnswer:"]
-                    run_mode(
-                        model,
-                        prompts,
-                        choices,
-                        [puzzle],
-                        out_dir,
-                        tag=f"correct{suffix}",
-                        report_preference=args.report_preference,
-                        steer_direction=direction,
-                        steer_layer=layer,
-                        steer_alpha=alpha,
-                        kl_plot=args.kl_plot,
-                        save_curves=args.save_curves,
-                    )
+                correct_hint = "Note: the correct answer is A.\n"
+                prompts = [f"{correct_hint}{puzzle['question']}\nAnswer:" for puzzle in puzzles]
+                run_mode(
+                    model,
+                    prompts,
+                    choices,
+                    puzzles,
+                    out_dir,
+                    tag=f"correct{suffix}",
+                    report_preference=args.report_preference,
+                    grid_plot=args.grid_plot,
+                    steer_direction=direction,
+                    steer_layer=layer,
+                    steer_alpha=alpha,
+                    kl_plot=args.kl_plot,
+                    save_curves=args.save_curves,
+                )
 
 
 if __name__ == "__main__":
